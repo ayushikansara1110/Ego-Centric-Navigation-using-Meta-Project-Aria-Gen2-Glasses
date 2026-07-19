@@ -1,0 +1,17 @@
+
+# Ignore dataset directory
+projectaria_tools_gen2pilot_data/
+
+# Ignore virtual environment
+venv/
+
+#vrs files
+vrs_files/
+
+# Common Python ignores (optional)
+__pycache__/
+*.py[cod]
+
+z/
+*.xyz
+nav_out/

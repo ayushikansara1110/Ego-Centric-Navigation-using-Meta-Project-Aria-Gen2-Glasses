@@ -1,0 +1,54 @@
+adb shell ls /sdcard
+adb shell ls /sdcard/recording
+adb pull sdcard/recording/blah_blah_blah.vrs
+
+
+
+cd ~/Downloads
+ls
+chmod +x Aria-Studio-2.0.0.appimage 
+./Aria-Studio-2.0.0.appimage -no-sandbox
+
+
+
+aria_gen2 auth pair 
+(connect to aria studio and then put this on ther terminal)
+
+
+aria_gen2 recording download-all -o <output_directory>
+
+
+aria_rerun_viewer --vrs ~/Downloads/<recording_name>.vrs
+
+
+aria streaming start \
+--interface usb \
+--use-ephemeral-certs \
+--profile profile15
+
+
+aria streaming start \
+--interface wifi \
+--use-ephemeral-certs \
+--profile profile15
+
+(leave the terminal, open another one and run script)
+
+
+cd ~/ORB_SLAM3
+code Examples/Stereo/ARIA-ASB-RECTIFIED.yaml
+
+
+cd ~/ORB_SLAM3
+
+./Examples/Stereo-Inertial/stereo_inertial_tum_vi \
+Vocabulary/ORBvoc.txt \
+Examples/Stereo-Inertial/ARIA-ASB.yaml \
+/home/ayushi/aria-navigation/datasets/asb_pf15_forward_subset/left_orb \
+/home/ayushi/aria-navigation/datasets/asb_pf15_forward_subset/right_orb \
+/home/ayushi/aria-navigation/datasets/asb_pf15_forward_subset/timestamps_orb.txt \
+/home/ayushi/aria-navigation/datasets/asb_pf15_forward_subset/imu_orb.csv
+
+
+
+aria_mps single -i <path to vrs file or directory> [options]

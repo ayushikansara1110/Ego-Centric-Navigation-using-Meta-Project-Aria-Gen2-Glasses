@@ -1,0 +1,690 @@
+{
+  "num_nodes": 113,
+  "num_edges": 480,
+  "labeled_nodes": {
+    "0": {
+      "label": "CSB-3037: Joe O'Connell and Pearse Carroll's Office",
+      "x": 6.547,
+      "y": -14.208,
+      "notes": ""
+    },
+    "1": {
+      "label": "",
+      "x": 7.547,
+      "y": -14.208,
+      "notes": ""
+    },
+    "2": {
+      "label": "CSB-3038: Peter O'Kane's Office",
+      "x": 6.047,
+      "y": -13.708,
+      "notes": ""
+    },
+    "3": {
+      "label": "",
+      "x": 7.047,
+      "y": -13.708,
+      "notes": ""
+    },
+    "4": {
+      "label": "",
+      "x": 8.047,
+      "y": -13.708,
+      "notes": ""
+    },
+    "5": {
+      "label": "",
+      "x": 6.047,
+      "y": -13.208,
+      "notes": ""
+    },
+    "6": {
+      "label": "",
+      "x": 7.047,
+      "y": -13.208,
+      "notes": ""
+    },
+    "7": {
+      "label": "",
+      "x": 8.047,
+      "y": -13.208,
+      "notes": ""
+    },
+    "8": {
+      "label": "Emergency Exit Door - Washrooms ahead of it along with emergency stairwell",
+      "x": 9.047,
+      "y": -13.208,
+      "notes": ""
+    },
+    "9": {
+      "label": "",
+      "x": 5.547,
+      "y": -12.708,
+      "notes": ""
+    },
+    "10": {
+      "label": "CSB: 3017: Switch/Store Room",
+      "x": 6.547,
+      "y": -12.708,
+      "notes": ""
+    },
+    "11": {
+      "label": "CSB-3018: accessible Washroom",
+      "x": 8.547,
+      "y": -12.708,
+      "notes": ""
+    },
+    "12": {
+      "label": "",
+      "x": 9.547,
+      "y": -12.708,
+      "notes": ""
+    },
+    "13": {
+      "label": "",
+      "x": 10.547,
+      "y": -12.708,
+      "notes": ""
+    },
+    "14": {
+      "label": "",
+      "x": 5.547,
+      "y": -12.208,
+      "notes": ""
+    },
+    "15": {
+      "label": "CSB-3019: Doctor Karl Mason's Office",
+      "x": 9.547,
+      "y": -12.208,
+      "notes": ""
+    },
+    "16": {
+      "label": "",
+      "x": 10.547,
+      "y": -12.208,
+      "notes": ""
+    },
+    "17": {
+      "label": "",
+      "x": 11.547,
+      "y": -12.208,
+      "notes": ""
+    },
+    "18": {
+      "label": "",
+      "x": 5.047,
+      "y": -11.708,
+      "notes": ""
+    },
+    "19": {
+      "label": "",
+      "x": 11.047,
+      "y": -11.708,
+      "notes": ""
+    },
+    "20": {
+      "label": "",
+      "x": 12.047,
+      "y": -11.708,
+      "notes": ""
+    },
+    "21": {
+      "label": "",
+      "x": 13.047,
+      "y": -11.708,
+      "notes": ""
+    },
+    "22": {
+      "label": "",
+      "x": 5.047,
+      "y": -11.208,
+      "notes": ""
+    },
+    "23": {
+      "label": "",
+      "x": 12.047,
+      "y": -11.208,
+      "notes": ""
+    },
+    "24": {
+      "label": "CSB-3020: Career Development Centre Office",
+      "x": 13.047,
+      "y": -11.208,
+      "notes": ""
+    },
+    "25": {
+      "label": "",
+      "x": 14.047,
+      "y": -11.208,
+      "notes": ""
+    },
+    "26": {
+      "label": "CSB-3033: Doctor Mamoona asghar's Office",
+      "x": 15.047,
+      "y": -11.208,
+      "notes": ""
+    },
+    "27": {
+      "label": "CSB-3032: Doctor Owen Molloy' Office",
+      "x": 16.047,
+      "y": -11.208,
+      "notes": ""
+    },
+    "28": {
+      "label": "",
+      "x": 17.047,
+      "y": -11.208,
+      "notes": ""
+    },
+    "29": {
+      "label": "CSB-3039: Doctor Connor Hayes' Office",
+      "x": 4.547,
+      "y": -10.708,
+      "notes": ""
+    },
+    "30": {
+      "label": "",
+      "x": 13.547,
+      "y": -10.708,
+      "notes": ""
+    },
+    "31": {
+      "label": "",
+      "x": 14.547,
+      "y": -10.708,
+      "notes": ""
+    },
+    "32": {
+      "label": "",
+      "x": 15.547,
+      "y": -10.708,
+      "notes": ""
+    },
+    "33": {
+      "label": "",
+      "x": 16.547,
+      "y": -10.708,
+      "notes": ""
+    },
+    "34": {
+      "label": "",
+      "x": 17.547,
+      "y": -10.708,
+      "notes": ""
+    },
+    "35": {
+      "label": "",
+      "x": 4.547,
+      "y": -10.208,
+      "notes": ""
+    },
+    "36": {
+      "label": "CSB-3021: Doctor Bharati Raja Chakravarthi's Office",
+      "x": 14.047,
+      "y": -10.208,
+      "notes": ""
+    },
+    "37": {
+      "label": "",
+      "x": 15.047,
+      "y": -10.208,
+      "notes": ""
+    },
+    "38": {
+      "label": "",
+      "x": 16.047,
+      "y": -10.208,
+      "notes": ""
+    },
+    "39": {
+      "label": "",
+      "x": 17.047,
+      "y": -10.208,
+      "notes": ""
+    },
+    "40": {
+      "label": "CSB-3031: Doctor Finlay Smith's Office",
+      "x": 18.047,
+      "y": -10.208,
+      "notes": ""
+    },
+    "41": {
+      "label": "",
+      "x": 4.047,
+      "y": -9.708,
+      "notes": ""
+    },
+    "42": {
+      "label": "",
+      "x": 16.547,
+      "y": -9.708,
+      "notes": ""
+    },
+    "43": {
+      "label": "",
+      "x": 17.547,
+      "y": -9.708,
+      "notes": ""
+    },
+    "44": {
+      "label": "",
+      "x": 4.047,
+      "y": -9.208,
+      "notes": ""
+    },
+    "45": {
+      "label": "",
+      "x": 17.047,
+      "y": -9.208,
+      "notes": ""
+    },
+    "46": {
+      "label": "",
+      "x": 18.047,
+      "y": -9.208,
+      "notes": ""
+    },
+    "47": {
+      "label": "CSB-3040: Doctor Ihsaan Ullah's Office",
+      "x": 3.547,
+      "y": -8.708,
+      "notes": ""
+    },
+    "48": {
+      "label": "CSB-3022: Career Development Centre Office",
+      "x": 18.047,
+      "y": -8.708,
+      "notes": ""
+    },
+    "49": {
+      "label": "",
+      "x": 19.047,
+      "y": -8.708,
+      "notes": ""
+    },
+    "50": {
+      "label": "",
+      "x": 3.547,
+      "y": -8.208,
+      "notes": ""
+    },
+    "51": {
+      "label": "",
+      "x": 19.047,
+      "y": -8.208,
+      "notes": ""
+    },
+    "52": {
+      "label": "CSB-3030: Doctor Jamal Nasir's Office",
+      "x": 20.047,
+      "y": -8.208,
+      "notes": ""
+    },
+    "53": {
+      "label": "",
+      "x": 3.047,
+      "y": -7.708,
+      "notes": ""
+    },
+    "54": {
+      "label": "CSB-3023: Laura Moran's Office/Pensions and Investments Office",
+      "x": 20.047,
+      "y": -7.708,
+      "notes": ""
+    },
+    "55": {
+      "label": "",
+      "x": 21.047,
+      "y": -7.708,
+      "notes": ""
+    },
+    "56": {
+      "label": "",
+      "x": 3.047,
+      "y": -7.208,
+      "notes": ""
+    },
+    "57": {
+      "label": "",
+      "x": 21.047,
+      "y": -7.208,
+      "notes": ""
+    },
+    "58": {
+      "label": "",
+      "x": 22.047,
+      "y": -7.208,
+      "notes": ""
+    },
+    "59": {
+      "label": "CSB-3041: Professor Jim Duggan's Office",
+      "x": 2.547,
+      "y": -6.708,
+      "notes": ""
+    },
+    "60": {
+      "label": "CSB-3016: Staff Room",
+      "x": 3.547,
+      "y": -6.708,
+      "notes": ""
+    },
+    "61": {
+      "label": "",
+      "x": 22.047,
+      "y": -6.708,
+      "notes": ""
+    },
+    "62": {
+      "label": "",
+      "x": 23.047,
+      "y": -6.708,
+      "notes": ""
+    },
+    "63": {
+      "label": "CSB-3029: Doctor Effirul Ramlan's Office",
+      "x": 24.047,
+      "y": -6.708,
+      "notes": ""
+    },
+    "64": {
+      "label": "",
+      "x": 2.547,
+      "y": -6.208,
+      "notes": ""
+    },
+    "65": {
+      "label": "",
+      "x": 23.047,
+      "y": -6.208,
+      "notes": ""
+    },
+    "66": {
+      "label": "CSB-3024: Karen Costello's Office/Pensions and Investments Office",
+      "x": 24.047,
+      "y": -6.208,
+      "notes": ""
+    },
+    "67": {
+      "label": "",
+      "x": 2.547,
+      "y": -5.708,
+      "notes": ""
+    },
+    "68": {
+      "label": "",
+      "x": 23.547,
+      "y": -5.708,
+      "notes": ""
+    },
+    "69": {
+      "label": "",
+      "x": 24.547,
+      "y": -5.708,
+      "notes": ""
+    },
+    "70": {
+      "label": "",
+      "x": 25.547,
+      "y": -5.708,
+      "notes": ""
+    },
+    "71": {
+      "label": "",
+      "x": 2.047,
+      "y": -5.208,
+      "notes": ""
+    },
+    "72": {
+      "label": "",
+      "x": 24.047,
+      "y": -5.208,
+      "notes": ""
+    },
+    "73": {
+      "label": "",
+      "x": 25.047,
+      "y": -5.208,
+      "notes": ""
+    },
+    "74": {
+      "label": "",
+      "x": 26.047,
+      "y": -5.208,
+      "notes": ""
+    },
+    "75": {
+      "label": "",
+      "x": 2.047,
+      "y": -4.708,
+      "notes": ""
+    },
+    "76": {
+      "label": "",
+      "x": 24.547,
+      "y": -4.708,
+      "notes": ""
+    },
+    "77": {
+      "label": "",
+      "x": 25.547,
+      "y": -4.708,
+      "notes": ""
+    },
+    "78": {
+      "label": "CSB-3028: Doctor Waqar Shahid Qureshi's Office",
+      "x": 26.547,
+      "y": -4.708,
+      "notes": ""
+    },
+    "79": {
+      "label": "",
+      "x": 27.547,
+      "y": -4.708,
+      "notes": ""
+    },
+    "80": {
+      "label": "CSB-3027: Joanne Boom's Office/Pensions and Investments Office",
+      "x": 28.547,
+      "y": -4.708,
+      "notes": ""
+    },
+    "81": {
+      "label": "CSB-3042: Karen Young's Office",
+      "x": 1.547,
+      "y": -4.208,
+      "notes": ""
+    },
+    "82": {
+      "label": "",
+      "x": 24.547,
+      "y": -4.208,
+      "notes": ""
+    },
+    "83": {
+      "label": "",
+      "x": 25.547,
+      "y": -4.208,
+      "notes": ""
+    },
+    "84": {
+      "label": "CSB-3026: Doctor Takfarinas Saber's Office",
+      "x": 26.547,
+      "y": -4.208,
+      "notes": ""
+    },
+    "85": {
+      "label": "",
+      "x": 27.547,
+      "y": -4.208,
+      "notes": ""
+    },
+    "86": {
+      "label": "",
+      "x": 28.547,
+      "y": -4.208,
+      "notes": ""
+    },
+    "87": {
+      "label": "",
+      "x": 29.547,
+      "y": -4.208,
+      "notes": ""
+    },
+    "88": {
+      "label": "",
+      "x": 1.547,
+      "y": -3.708,
+      "notes": ""
+    },
+    "89": {
+      "label": "",
+      "x": 25.547,
+      "y": -3.708,
+      "notes": ""
+    },
+    "90": {
+      "label": "CSB-3025: Triona Lydon's Office/Pensions and Investments Office",
+      "x": 26.547,
+      "y": -3.708,
+      "notes": ""
+    },
+    "91": {
+      "label": "",
+      "x": 28.547,
+      "y": -3.708,
+      "notes": ""
+    },
+    "92": {
+      "label": "",
+      "x": 29.547,
+      "y": -3.708,
+      "notes": ""
+    },
+    "93": {
+      "label": "",
+      "x": 1.047,
+      "y": -3.208,
+      "notes": ""
+    },
+    "94": {
+      "label": "CSB-3043: Doctor Sam Redfern's Office",
+      "x": 0.547,
+      "y": -2.208,
+      "notes": "Opposite to staff room entrance"
+    },
+    "95": {
+      "label": "",
+      "x": 0.047,
+      "y": -1.208,
+      "notes": ""
+    },
+    "96": {
+      "label": "CSB-3044: Doctor James McDermott's Office",
+      "x": -0.453,
+      "y": -0.208,
+      "notes": ""
+    },
+    "97": {
+      "label": "CSB-3015: Printing Room",
+      "x": -0.453,
+      "y": 0.792,
+      "notes": ""
+    },
+    "98": {
+      "label": "",
+      "x": -0.953,
+      "y": 1.792,
+      "notes": ""
+    },
+    "99": {
+      "label": "CSB-3045: Doctor Enda Howley's Office",
+      "x": -0.953,
+      "y": 2.792,
+      "notes": ""
+    },
+    "100": {
+      "label": "",
+      "x": 0.047,
+      "y": 2.792,
+      "notes": ""
+    },
+    "101": {
+      "label": "",
+      "x": -0.953,
+      "y": 3.292,
+      "notes": ""
+    },
+    "102": {
+      "label": "",
+      "x": 0.047,
+      "y": 3.292,
+      "notes": ""
+    },
+    "103": {
+      "label": "",
+      "x": -0.953,
+      "y": 3.792,
+      "notes": ""
+    },
+    "104": {
+      "label": "",
+      "x": 0.047,
+      "y": 3.792,
+      "notes": ""
+    },
+    "105": {
+      "label": "CSB-3014: School administration Office, School of Computer Science",
+      "x": 1.047,
+      "y": 3.792,
+      "notes": ""
+    },
+    "106": {
+      "label": "CSB-3046: Computer Science Boardroom",
+      "x": -0.953,
+      "y": 4.292,
+      "notes": ""
+    },
+    "107": {
+      "label": "",
+      "x": 0.047,
+      "y": 4.292,
+      "notes": ""
+    },
+    "108": {
+      "label": "",
+      "x": 1.047,
+      "y": 4.292,
+      "notes": ""
+    },
+    "109": {
+      "label": "",
+      "x": -0.453,
+      "y": 4.792,
+      "notes": ""
+    },
+    "110": {
+      "label": "",
+      "x": 0.547,
+      "y": 4.792,
+      "notes": ""
+    },
+    "111": {
+      "label": "CSB-3047: Doctor Michael Schukat's Office",
+      "x": -0.453,
+      "y": 5.292,
+      "notes": ""
+    },
+    "112": {
+      "label": "Corridor Main Door",
+      "x": 0.547,
+      "y": 5.292,
+      "notes": ""
+    }
+  },
+  "bbox_world": {
+    "x_min": -0.9530849456787109,
+    "x_max": 29.54691505432129,
+    "y_min": -14.207683563232422,
+    "y_max": 5.292316436767578
+  }
+}

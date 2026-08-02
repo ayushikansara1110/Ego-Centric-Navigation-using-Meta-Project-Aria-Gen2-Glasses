@@ -1,7 +1,3 @@
-"""
-build_graph.py  (updated — handles labels.json template format)
-"""
-
 import argparse
 import json
 import os
@@ -97,7 +93,6 @@ def main():
     waypoints = extract_waypoints(m, args.spacing)
     edges     = build_edges(waypoints, m, args.max_edge)
 
-    # --- labels: handle both flat {"id": "name"} and template {"id": {"label": "name", ...}} ---
     labels = {}
     if args.labels and os.path.exists(args.labels):
         with open(args.labels) as f:

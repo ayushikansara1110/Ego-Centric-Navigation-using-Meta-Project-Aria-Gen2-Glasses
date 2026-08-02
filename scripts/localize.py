@@ -1,18 +1,3 @@
-"""
-localize.py
-Real-time. Two jobs:
-
-1. Bootstrap (runs ONCE at session start): match the first live frame against
-   reloc_index.pkl, solvePnPRansac -> transform from this session's SLAM world
-   frame to the map's world frame.
-
-2. Live tracking (runs every frame, cheap): apply that cached transform to
-   Aria's own live fused pose (Aria's on-device SLAM already fuses IMU + visual
-   odometry for you — you don't hand-fuse raw IMU yourself, you just consume
-   its continuous 6DoF pose stream). Also checks whether the person is
-   drifting off the planned path.
-"""
-
 import pickle
 import threading
 import time
@@ -26,21 +11,122 @@ MIN_INLIERS = 6
 LOWE_RATIO = 0.75
 OFF_PATH_THRESHOLD_M = 0.6      # perpendicular distance from path before we warn
 HEADING_DELTA_THRESHOLD_DEG = 25
-DRIFT_REFRESH_INTERVAL_S = 20   # re-run PnP in the background this often
+DRIFT_REFRESH_INTERVAL_S = 20   # re-run PnP in the background this often (bootstrap/refresh path)
 
 
-def load_index(path="maps/reloc_index.pkl"):
+def load_index(path="/home/ayushi/aria_gen2/scripts/reloc_index.pkl"):
     with open(path, "rb") as f:
         return pickle.load(f)
 
 
-def try_pnp(frame, index, camera_matrix, dist_coeffs):
-    """Single-frame relocalization attempt. Returns (rvec, tvec) or None."""
+def build_camera_matrix(cam_calib):
+    """
+    Builds a synthetic PINHOLE camera_matrix (fx, fy, cx, cy, no distortion)
+    from a projectaria_tools FISHEYE624 CameraCalibration object. This is
+    NOT the camera's real intrinsics for direct use with raw pixel points --
+    it's the target model that undistort_points_fisheye624() maps INTO.
+    Pass this (with dist_coeffs=None) to cv2.solvePnPRansac after undistorting
+    points, not the other way around.
+    """
+    fx, fy = cam_calib.get_focal_lengths()
+    cx, cy = cam_calib.get_principal_point()
+    return np.array([
+        [fx, 0.0, cx],
+        [0.0, fy, cy],
+        [0.0, 0.0, 1.0],
+    ], dtype=np.float64)
+
+
+def undistort_points_fisheye624(image_points, cam_calib, camera_matrix):
+    """
+    Converts real FISHEYE624 pixel coordinates into ideal pinhole pixel
+    coordinates using the camera's own unproject() (real fisheye model) ->
+    reproject through the synthetic pinhole camera_matrix. This lets
+    cv2.solvePnPRansac be used correctly with dist_coeffs=None, instead of
+    (wrongly) treating FISHEYE624 params as OpenCV radial-tangential
+    distortion coefficients.
+
+    Points outside the camera's valid FOV (unproject returns None) are
+    dropped -- caller must drop the corresponding object_points at the same
+    indices, which try_pnp() below does.
+
+    VERIFY: unproject()'s exact input convention (pixel (u,v) vs (x,y), 0 vs
+    0.5 pixel-center offset) hasn't been independently confirmed -- if
+    solved poses come out systematically offset/rotated once tested against
+    known ground truth, this is the first place to check.
+    """
+    fx = camera_matrix[0, 0]
+    fy = camera_matrix[1, 1]
+    cx = camera_matrix[0, 2]
+    cy = camera_matrix[1, 2]
+
+    undistorted = []
+    valid_mask = []
+    for pt in image_points:
+        ray = cam_calib.unproject(np.array(pt, dtype=np.float64))
+        if ray is None:
+            valid_mask.append(False)
+            continue
+        x, y, z = ray
+        if z <= 0:
+            valid_mask.append(False)
+            continue
+        undistorted.append([fx * (x / z) + cx, fy * (y / z) + cy])
+        valid_mask.append(True)
+
+    return np.array(undistorted, dtype=np.float64), np.array(valid_mask, dtype=bool)
+
+
+IMGIDX_LIMIT = 262144  # OpenCV BFMatcher's hard per-train-set row cap (1 << 18)
+
+def _chunked_knn_match(bf, query_descs, train_descs, k=2, chunk_size=200000):
+    """
+    BFMatcher.knnMatch() hard-caps train descriptors at IMGIDX_LIMIT rows.
+    Splits train_descs into chunks under that limit, matches against each,
+    then merges to keep the true best-k matches per query descriptor across
+    chunks (remapping trainIdx back to the original, unchunked index).
+    """
+    if len(train_descs) <= chunk_size:
+        return bf.knnMatch(query_descs, train_descs, k=k)
+
+    all_chunk_matches = []
+    offsets = []
+    for start in range(0, len(train_descs), chunk_size):
+        chunk = train_descs[start:start + chunk_size]
+        all_chunk_matches.append(bf.knnMatch(query_descs, chunk, k=k))
+        offsets.append(start)
+
+    merged = []
+    for q_idx in range(len(query_descs)):
+        candidates = []
+        for chunk_idx, chunk_matches in enumerate(all_chunk_matches):
+            for m in chunk_matches[q_idx]:
+                m.trainIdx += offsets[chunk_idx]  # remap to global index space
+                candidates.append(m)
+        candidates.sort(key=lambda m: m.distance)
+        merged.append(candidates[:k])
+    return merged
+
+
+def try_pnp(frame, index, camera_matrix, dist_coeffs, cam_calib=None):
+    """
+    Single-frame relocalization attempt. Returns (rvec, tvec) or None.
+
+    If cam_calib is provided (a projectaria_tools FISHEYE624 CameraCalibration
+    object), detected keypoints are undistorted through the real fisheye
+    model before PnP, and camera_matrix/dist_coeffs should be the SYNTHETIC
+    pinhole matrix from build_camera_matrix() + dist_coeffs=None -- NOT the
+    raw FISHEYE624 parameters.
+
+    If cam_calib is None (backward-compatible path), camera_matrix/dist_coeffs
+    are used as-is with cv2's own distortion model -- only correct for
+    genuinely pinhole/radial-tangential cameras, not Aria SLAM cameras.
+    """
     kps, descs = ORB.detectAndCompute(frame, None)
     if descs is None or len(descs) < MIN_INLIERS:
         return None
 
-    matches = BF.knnMatch(descs, index["descriptors"], k=2)
+    matches = _chunked_knn_match(BF, descs, index["descriptors"], k=2)
     good = [m for m, n in matches if n is not None and m.distance < LOWE_RATIO * n.distance]
     if len(good) < MIN_INLIERS:
         return None
@@ -48,8 +134,17 @@ def try_pnp(frame, index, camera_matrix, dist_coeffs):
     image_points = np.array([kps[m.queryIdx].pt for m in good], dtype=np.float64)
     object_points = np.array([index["xyz_map_frame"][m.trainIdx] for m in good], dtype=np.float64)
 
+    if cam_calib is not None:
+        image_points, valid_mask = undistort_points_fisheye624(image_points, cam_calib, camera_matrix)
+        object_points = object_points[valid_mask]
+        if len(image_points) < MIN_INLIERS:
+            return None
+        pnp_dist_coeffs = None
+    else:
+        pnp_dist_coeffs = dist_coeffs
+
     ok, rvec, tvec, inliers = cv2.solvePnPRansac(
-        object_points, image_points, camera_matrix, dist_coeffs,
+        object_points, image_points, camera_matrix, pnp_dist_coeffs,
         reprojectionError=4.0, confidence=0.99
     )
     if not ok or inliers is None or len(inliers) < MIN_INLIERS:
@@ -67,40 +162,55 @@ def pose_to_matrix(rvec, tvec):
 
 class Tracker:
     """
-    Holds the cached session->map transform and answers "where am I in map
-    frame right now" every frame for near-zero cost. Refreshes the transform
-    in the background periodically to correct drift.
+    Two usage modes are supported:
+
+    1. Session-relative mode (bootstrap / live_map_pose / start_background_refresh):
+       requires an external session pose (e.g. VIO) and composes it with a
+       cached map<-session transform. Kept for reference / future use.
+
+    2. Direct PnP mode (localize / localize_or_last_known): re-runs PnP every
+       call, no session pose needed at all. Simpler, no VIO dependency,
+       coarser update rate. This is what the current script uses.
+
+    cam_calib: optional projectaria_tools FISHEYE624 CameraCalibration
+    object. If provided, camera_matrix MUST be the synthetic pinhole matrix
+    from build_camera_matrix(cam_calib) and dist_coeffs is ignored (fisheye
+    undistortion is used instead). If None, camera_matrix/dist_coeffs are
+    used as-is with OpenCV's own distortion model.
     """
 
-    def __init__(self, index, camera_matrix, dist_coeffs):
+    def __init__(self, index, camera_matrix, dist_coeffs, cam_calib=None):
         self.index = index
         self.camera_matrix = camera_matrix
         self.dist_coeffs = dist_coeffs
+        self.cam_calib = cam_calib
         self.T_map_from_session = None
+        self._last_good_pose = None
+        self._last_good_ts = 0.0
         self._lock = threading.Lock()
         self._stop = False
 
+    def _try_pnp(self, frame):
+        return try_pnp(frame, self.index, self.camera_matrix, self.dist_coeffs, cam_calib=self.cam_calib)
+
+    # --- session-relative mode ---
+
     def bootstrap(self, get_frame_fn, get_session_pose_fn, timeout_s=5.0, retry_interval_s=0.3):
-        """
-        Blocking. Call this once at startup — keep asking for frames (standing
-        still is fine, no walking needed) until PnP succeeds or timeout hits.
-        """
         deadline = time.time() + timeout_s
         while time.time() < deadline:
             frame = get_frame_fn()
-            result = try_pnp(frame, self.index, self.camera_matrix, self.dist_coeffs)
+            result = self._try_pnp(frame)
             if result is not None:
                 rvec, tvec = result
                 T_map_from_cam = pose_to_matrix(rvec, tvec)
-                T_session_from_cam = get_session_pose_fn()  # Aria's own live pose at this instant
+                T_session_from_cam = get_session_pose_fn()
                 with self._lock:
                     self.T_map_from_session = T_map_from_cam @ np.linalg.inv(T_session_from_cam)
                 return True
             time.sleep(retry_interval_s)
-        return False  # caller should fall back to a "please walk forward a few steps" prompt
+        return False
 
     def live_map_pose(self, T_session_from_cam):
-        """Cheap: one matrix multiply, called every frame."""
         with self._lock:
             if self.T_map_from_session is None:
                 return None
@@ -111,7 +221,7 @@ class Tracker:
             while not self._stop:
                 time.sleep(DRIFT_REFRESH_INTERVAL_S)
                 frame = get_frame_fn()
-                result = try_pnp(frame, self.index, self.camera_matrix, self.dist_coeffs)
+                result = self._try_pnp(frame)
                 if result is not None:
                     rvec, tvec = result
                     T_map_from_cam = pose_to_matrix(rvec, tvec)
@@ -123,14 +233,42 @@ class Tracker:
     def stop(self):
         self._stop = True
 
+    # --- direct PnP mode (no session pose required) ---
+
+    def localize(self, frame):
+        """
+        Single-shot PnP against the map. Returns a 4x4 T_map_from_cam matrix
+        directly. Returns None on failure -- caller decides fallback behavior.
+        """
+        result = self._try_pnp(frame)
+        if result is None:
+            return None
+        rvec, tvec = result
+        T_map_from_cam = pose_to_matrix(rvec, tvec)
+        with self._lock:
+            self._last_good_pose = T_map_from_cam
+            self._last_good_ts = time.time()
+        return T_map_from_cam
+
+    def localize_or_last_known(self, frame, max_staleness_s=5.0):
+        """
+        Try a fresh localize(); if it fails, fall back to the last successful
+        pose IF it's not too stale. Returns (T_or_None, was_fresh).
+        (pose, False) = using a slightly old fix.
+        (None, False) = no usable pose at all -- don't trust position, and
+        the caller should treat this as "lost" rather than silently
+        navigating on stale/garbage position.
+        """
+        T = self.localize(frame)
+        if T is not None:
+            return T, True
+        with self._lock:
+            if self._last_good_pose is not None and (time.time() - self._last_good_ts) < max_staleness_s:
+                return self._last_good_pose, False
+            return None, False
+
 
 def perpendicular_distance_and_heading_delta(pos_xy, heading_deg, seg_start_xy, seg_end_xy):
-    """
-    Path-adherence check. pos_xy: current (x,y) in map frame. heading_deg:
-    current facing direction. seg_start/end: the graph edge the person should
-    currently be walking along (from your existing A* path).
-    Returns (perpendicular_distance_m, heading_delta_deg).
-    """
     seg = np.array(seg_end_xy) - np.array(seg_start_xy)
     seg_len = np.linalg.norm(seg)
     seg_dir = seg / seg_len
@@ -143,7 +281,6 @@ def perpendicular_distance_and_heading_delta(pos_xy, heading_deg, seg_start_xy, 
 
 
 def check_path_adherence(pos_xy, heading_deg, seg_start_xy, seg_end_xy):
-    """Returns None if on track, else a short correction string."""
     perp_dist, heading_delta = perpendicular_distance_and_heading_delta(
         pos_xy, heading_deg, seg_start_xy, seg_end_xy
     )

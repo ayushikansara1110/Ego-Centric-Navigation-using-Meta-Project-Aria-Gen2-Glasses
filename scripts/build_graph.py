@@ -37,7 +37,6 @@ def world_to_cell(wx: float, wy: float, x_min: float, y_min: float, cs: float,
 
 def bresenham_clear(grid: np.ndarray,
                     r0: int, c0: int, r1: int, c1: int) -> bool:
-    """Return True if no obstacle (value=1) lies on the line from (r0,c0) to (r1,c1)."""
     dr = abs(r1 - r0)
     dc = abs(c1 - c0)
     sr = 1 if r1 > r0 else -1

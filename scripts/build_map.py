@@ -100,8 +100,6 @@ def build_occupancy_grid(pts: np.ndarray,
         "cols":      cols,
     }
 
-
-
 def main():
     parser = argparse.ArgumentParser(description="Build 2-D occupancy map from Aria MPS outputs")
     parser.add_argument("--points",       required=True,  help="path to semidense_points.csv.gz")

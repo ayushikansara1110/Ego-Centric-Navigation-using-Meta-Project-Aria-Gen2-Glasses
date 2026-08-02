@@ -1,17 +1,3 @@
-"""
-aria_navigate.py
-Main real-time loop. Run this instead of navigate.py directly.
-
-Ties together:
-  - localize.py    -> where am I, right now, in map coordinates
-  - perception.py  -> doors and people in view, right now
-  - navigate.py    -> path planning + turn-by-turn logic (existing, refactored
-                       into importable functions — see checklist at bottom)
-
-Voice output is arbitrated by priority so a collision warning always
-interrupts a routine nav instruction instead of queuing behind it.
-"""
-
 import time
 import queue
 import threading
@@ -19,9 +5,13 @@ import pyttsx3
 
 import localize
 import perception
-import navigate  # your existing file, refactored — see checklist below
+import navigate  
 
-# --- priority levels: lower number = more urgent, always jumps the queue ---
+import threading
+import numpy as np
+import aria.sdk as aria
+from projectaria_tools.core.sensor_data import ImageDataRecord
+
 PRIO_COLLISION = 0
 PRIO_OFF_PATH = 1
 PRIO_DOOR = 2
@@ -33,6 +23,41 @@ COOLDOWN_S = {
     PRIO_DOOR: 3.0,
     PRIO_NAV_INSTRUCTION: 0.0,
 }
+
+
+class AriaStreamObserver:
+    def __init__(self):
+        self.latest_slam_frame = None
+        self.latest_rgb_frame = None
+        self._lock = threading.Lock()
+
+    def on_image_received(self, image: np.array, record: ImageDataRecord):
+        with self._lock:
+            if record.camera_id == aria.CameraId.Slam1:   # confirm exact enum name for your setup
+                self.latest_slam_frame = image
+            elif record.camera_id == aria.CameraId.Rgb:
+                self.latest_rgb_frame = image
+
+
+# --- one-time setup, at the top of test_relocalization_nav.py or a shared aria_stream.py ---
+device_client = aria.DeviceClient()
+device = device_client.connect()
+
+streaming_manager = device.streaming_manager
+streaming_client = streaming_manager.streaming_client
+
+streaming_config = aria.StreamingConfig()
+streaming_config.profile_name = "profile18"  # match whatever profile you recorded your map with
+streaming_manager.streaming_config = streaming_config
+streaming_manager.start_streaming()
+
+sub_config = streaming_client.subscription_config
+sub_config.subscriber_data_type = aria.StreamingDataType.Slam | aria.StreamingDataType.Rgb
+streaming_client.subscription_config = sub_config
+
+observer = AriaStreamObserver()
+streaming_client.set_streaming_client_observer(observer)
+streaming_client.subscribe()
 
 
 class VoiceArbiter:
@@ -94,13 +119,11 @@ def run(goal_label, maps_dir="maps/"):
         pos_xy = T_map[:2, 3]
         heading_deg = navigate.heading_from_matrix(T_map)
 
-        # --- path adherence ---
         seg_start, seg_end = path[edge_idx], path[edge_idx + 1]
         correction = localize.check_path_adherence(pos_xy, heading_deg, seg_start.xy, seg_end.xy)
         if correction:
             voice.say(PRIO_OFF_PATH, correction)
 
-        # --- waypoint progress -> next turn instruction ---
         if navigate.reached_waypoint(pos_xy, seg_end.xy):
             edge_idx += 1
             if edge_idx < len(path) - 1:
@@ -109,7 +132,6 @@ def run(goal_label, maps_dir="maps/"):
             else:
                 voice.say(PRIO_NAV_INSTRUCTION, f"You've arrived at {goal_label}")
 
-        # --- perception: doors + people ---
         frame_rgb = get_live_rgb_frame()
         doors, people = perceiver.process_frame(frame_rgb)
 
@@ -124,15 +146,14 @@ def run(goal_label, maps_dir="maps/"):
             elif person.distance_m and person.distance_m < 2.5:
                 voice.say(PRIO_COLLISION, f"Person approaching on your {person.side}")
 
-        time.sleep(0.05)  # ~20Hz loop; tune to your actual frame rate
+        time.sleep(0.05)  
 
 
-# --- stubs: wire these to your existing Gen 2 stream_receiver / FrameBuffer code ---
 def get_live_frame():
-    raise NotImplementedError("Return latest SLAM camera grayscale frame")
+    return observer.latest_slam_frame
 
 def get_live_rgb_frame():
-    raise NotImplementedError("Return latest RGB frame for YOLO")
+    return observer.latest_rgb_frame
 
 def get_live_session_pose():
     raise NotImplementedError("Return latest 4x4 pose matrix from Aria's on-device VIO/SLAM stream")

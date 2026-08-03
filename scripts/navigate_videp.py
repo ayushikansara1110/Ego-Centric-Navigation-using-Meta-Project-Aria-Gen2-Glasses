@@ -31,10 +31,7 @@ NEARBY_LABEL_THRESHOLD_M = 3.0       # how close a node must be to a labeled poi
 
 
 class Node:
-    """
-    Thin wrapper around a graph waypoint so callers can do path[i].xy
-    and path[i].id, matching what aria_navigate.py / replay_vrs.py expect.
-    """
+    
     __slots__ = ("id", "xy")
 
     def __init__(self, node_id, xy):
@@ -46,14 +43,6 @@ class Node:
 
 
 class Graph:
-    """
-    Holds waypoints/labels/adjacency and exposes Node objects by id.
-    Internally mirrors the standalone CLI tool's npz layout (waypoints,
-    labels, adj arrays), but this module's load_graph reads a pickle
-    instead (matching what aria_navigate.py / replay_vrs.py already call:
-    navigate.load_graph("maps/graph.pkl")).
-    """
-
     def __init__(self, waypoints, labels, adj):
         # waypoints: (N, 2) array of world xy per node id
         # labels: (N,) array of per-node label strings ("" if none)
@@ -70,13 +59,7 @@ class Graph:
 
 
 def load_graph(path):
-    """
-    Loads a pickled dict with keys 'waypoints', 'labels', 'adj' -- build this
-    once from your mapping pipeline (e.g. adapt the standalone CLI tool's
-    .npz output: pickle.dump({"waypoints": ..., "labels": ..., "adj": ...})
-    instead of np.savez, or write a one-time conversion script if you
-    already have graph.npz from the CLI tool).
-    """
+    
     path = str(path)
     if path.endswith(".npz"):
         data = np.load(path, allow_pickle=True)
@@ -88,34 +71,25 @@ def load_graph(path):
 
 
 def load_labels(path):
-    """
-    labels.json is keyed by node_id, each holding {"label", "x", "y", "notes"}.
-    Returns {label_name: node_id}, skipping nodes with an empty label --
-    this is the shape node_for_label() / ask_destination() actually need.
-    """
+    
     with open(path, "r") as f:
         raw = json.load(f)
     return {v["label"]: int(k) for k, v in raw.items() if v.get("label")}
 
 
 def node_for_label(label, labels):
-    """labels: dict from load_labels(). Raises a clear error if the label
-    isn't found rather than returning None and failing confusingly later."""
     if label not in labels:
         raise KeyError(f"'{label}' not found in labels.json -- available: {list(labels.keys())}")
     return labels[label]
 
 
 def nearest_node(pos_xy, graph):
-    """Returns the node id whose waypoint is closest to pos_xy (world frame)."""
     pos_xy = np.asarray(pos_xy, dtype=np.float64)
     dists = np.linalg.norm(graph.waypoints - pos_xy, axis=1)
     return int(dists.argmin())
 
 
 def _astar(graph, start_id, goal_id):
-    """Same algorithm as the standalone CLI tool's astar(): adjacency list +
-    heapq, straight-line-distance heuristic. Returns a list of node ids."""
     waypoints = graph.waypoints
     adj = graph.adj
 
@@ -167,16 +141,6 @@ def plan_path(graph, start_id, goal_id):
 
 
 def heading_from_matrix(T):
-    """
-    Extracts a 2D heading (degrees, 0=+X axis, CCW positive) from a 4x4 pose
-    matrix's rotation block, matching bearing_deg()'s convention in the
-    standalone CLI tool. Assumes the camera/device forward direction is
-    +X in its own frame projected into the map's XY plane -- if headings
-    look consistently rotated by a fixed offset once you test this live,
-    that offset is likely a device-forward-axis convention mismatch, not
-    a bug in this formula; adjust which local axis is treated as "forward"
-    accordingly.
-    """
     forward_local = np.array([1.0, 0.0, 0.0])
     forward_world = T[:3, :3] @ forward_local
     return math.degrees(math.atan2(forward_world[1], forward_world[0]))
@@ -216,14 +180,6 @@ def _turn_description(delta_deg):
 
 
 def instruction_for_edge(path, edge_idx):
-    """
-    Spoken instruction for walking path[edge_idx] -> path[edge_idx+1].
-    Compares the bearing of the upcoming edge against the previous edge (if
-    any) to produce a turn instruction, plus segment distance and any label
-    at the destination node of this edge -- same phrasing style as the
-    standalone CLI tool's generate_instructions(), but per-edge (called live
-    as each waypoint is reached) rather than all at once upfront.
-    """
     seg_start = path[edge_idx]
     seg_end = path[edge_idx + 1]
     dist = float(np.linalg.norm(seg_end.xy - seg_start.xy))
@@ -247,13 +203,7 @@ def instruction_for_edge(path, edge_idx):
 
 
 def label_near_node(node, labels_by_name, graph=None, threshold_m=NEARBY_LABEL_THRESHOLD_M):
-    """
-    Returns a label name whose node is within threshold_m of `node`, or None.
-    labels_by_name: dict from load_labels() ({name: node_id}). Requires
-    `graph` to look up those nodes' xy -- if not supplied, falls back to
-    exact node-id match only (no distance check), which still handles the
-    common case of "arrived at this exact waypoint" used in aria_navigate.py.
-    """
+    
     if graph is None:
         for name, node_id in labels_by_name.items():
             if node_id == node.id:

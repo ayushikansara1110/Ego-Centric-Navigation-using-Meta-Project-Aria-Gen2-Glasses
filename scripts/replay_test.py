@@ -1,29 +1,3 @@
-"""
-replay_vrs.py
-Offline test harness: run the SAME localization + perception + path-adherence
-logic used live against a recorded VRS file, instead of the live device
-stream. This isolates robustness testing (lighting, time of day, etc.) from
-the full live voice/collision stack -- the standard approach in
-visual-localization evaluation.
-
-IMPORTANT: before trusting slam_stream_label / rgb_stream_label below, run
-list_streams() on one of your actual recordings and confirm the labels.
-Exact data_provider method names/labels can shift slightly across
-projectaria_tools versions -- this is a one-time config check, not a rewrite,
-and the same API family (get_all_streams, get_label_from_stream_id,
-get_device_calibration, get_stream_id_from_label, get_num_data,
-get_image_data_by_index) already matches what build_reloc_index.py uses.
-
-NOTE: Aria SLAM cameras use the FISHEYE624 projection model, not plain
-pinhole+radial-tangential distortion. get_camera_calibration() below returns
-(camera_matrix, dist_coeffs, cam_calib) -- camera_matrix is a SYNTHETIC
-pinhole matrix (see localize.build_camera_matrix), dist_coeffs is always
-None, and cam_calib is the real FISHEYE624 calibration object, which
-localize.Tracker uses internally to undistort keypoints correctly before
-PnP. Do not treat camera_matrix as the camera's literal intrinsics for any
-other purpose.
-"""
-
 import numpy as np
 from projectaria_tools.core import data_provider
 
@@ -36,17 +10,6 @@ import matplotlib.pyplot as plt
 
 
 def _vio_status_is_valid(vio_data):
-    """
-    Best-effort validity check on a FrontendOutput sample. Your recording
-    showed VioStatus.FILTER_NOT_INITIALIZED and TrackingQuality.BAD on an
-    early frame -- both must be excluded. Since the exact enum member names
-    for "good" weren't confirmed against your SDK build, this checks by
-    substring on the enum's string form rather than importing VioStatus/
-    TrackingQuality directly (which would break if the import path differs).
-    VERIFY: print(vio_data.status, vio_data.pose_quality) on a few samples
-    from the middle of a walking recording and confirm this logic actually
-    flags them as valid -- adjust the substring checks below if not.
-    """
     status_str = str(vio_data.status)
     quality_str = str(vio_data.pose_quality)
     bad_markers = ("NOT_INITIALIZED", "INVALID", "BAD", "FAILED", "LOST")
@@ -58,11 +21,6 @@ def _vio_status_is_valid(vio_data):
 
 
 def _se3_to_matrix(se3_obj):
-    """
-    Tries known conversion methods across sophuspy/sophus-python builds,
-    in order of likelihood, and reports which one worked the first time
-    (so you can hardcode it later and drop the fallback chain if you want).
-    """
     if hasattr(se3_obj, "matrix"):
         return np.array(se3_obj.matrix())
     if hasattr(se3_obj, "to_matrix"):
@@ -114,17 +72,7 @@ def list_streams(vrs_path):
 
 
 def get_camera_calibration(provider, camera_label="slam-front-left"):
-    """
-    Returns (camera_matrix, dist_coeffs, cam_calib).
-
-    Aria SLAM cameras use FISHEYE624, which has no plain intrinsics_matrix/
-    distortion_coeffs pair -- camera_matrix here is a SYNTHETIC pinhole
-    matrix (localize.build_camera_matrix), dist_coeffs is always None, and
-    cam_calib is the real calibration object. Pass cam_calib through to
-    localize.Tracker so it can undistort keypoints via the real fisheye
-    model before running PnP -- do not pass camera_matrix/dist_coeffs alone
-    to cv2 functions expecting real distortion coefficients.
-    """
+    
     device_calib = provider.get_device_calibration()
     cam_calib = device_calib.get_camera_calib(camera_label)
     if cam_calib is None:
@@ -138,11 +86,6 @@ def get_camera_calibration(provider, camera_label="slam-front-left"):
 
 
 def _stream_frames_by_timestamp(provider, stream_id):
-    """
-    Yields (timestamp_ns, frame) for every sample in a stream, in order.
-    Used to walk SLAM and RGB streams in sync by timestamp rather than by
-    index, since the two cameras don't necessarily produce frames 1:1.
-    """
     num = provider.get_num_data(stream_id)
     for i in range(num):
         image_data, record = provider.get_image_data_by_index(stream_id, i)
@@ -151,11 +94,7 @@ def _stream_frames_by_timestamp(provider, stream_id):
 
 def replay_localization_only(vrs_path, index, camera_label="slam-front-left",
                               slam_stream_label="slam-front-left", stride=1):
-    """
-    stride=N processes every Nth frame instead of every frame -- consecutive
-    SLAM frames are highly redundant for a trajectory plot, so this cuts
-    runtime roughly by a factor of N with minimal loss of plotted detail.
-    """
+
     provider = data_provider.create_vrs_data_provider(vrs_path)
     camera_matrix, dist_coeffs, cam_calib = get_camera_calibration(provider, camera_label)
     tracker = localize.Tracker(index, camera_matrix, dist_coeffs, cam_calib=cam_calib)
@@ -186,33 +125,7 @@ def replay_full_pipeline(vrs_path, index, graph, labels, goal_label,
                           rgb_stream_label="camera-rgb",
                           vio_stream_label="vio",
                           pose_source="pnp"):
-    """
-    Full offline replay: localization + person/collision detection + path
-    adherence + instructions, matching what the live script would have said,
-    without any live device or audio needed.
 
-    Requires a chosen goal_label since there's no interactive prompt in
-    replay -- pass whichever destination you want to simulate walking toward.
-
-    pose_source controls what feeds check_path_adherence():
-      "pnp" (default) -- tracker.localize_or_last_known() per SLAM frame.
-        Position holds at the last known fix between successful PnP solves.
-      "recorded_vio" -- uses the device's own on-device VIO output (the
-        recorded 'vio' stream), NOT an approximation. One PnP solve is run
-        the first time a valid VIO sample is found, to establish
-        T_map_from_session (via tracker.bootstrap-equivalent logic); every
-        VIO sample after that is combined with the cached transform via
-        tracker.live_map_pose() -- cheap, and reflects real on-device VIO
-        quality rather than periodic re-solving. VIO samples with bad
-        status/tracking quality are skipped (position holds at last good
-        VIO-derived pose) -- see _vio_status_is_valid().
-
-    Returns a list of timestamped events, e.g.:
-      {"timestamp_ns": ..., "type": "instruction", "text": "..."}
-      {"timestamp_ns": ..., "type": "collision", "text": "..."}
-      {"timestamp_ns": ..., "type": "off_path", "text": "..."}
-      {"timestamp_ns": ..., "type": "localization_lost"}
-    """
     if pose_source not in ("pnp", "recorded_vio"):
         raise ValueError(f"pose_source must be 'pnp' or 'recorded_vio', got {pose_source!r}")
 
@@ -375,12 +288,6 @@ def replay_full_pipeline(vrs_path, index, graph, labels, goal_label,
 
 
 def compare_pose_sources(vrs_path, index, graph, labels, goal_label):
-    """
-    Run replay_full_pipeline twice on the same recording -- once with PnP-only
-    pose, once with real recorded on-device VIO -- and diff the resulting
-    events. This is the concrete way to answer "does VIO actually improve
-    path adherence enough to justify pursuing it further."
-    """
     pnp_events = replay_full_pipeline(vrs_path, index, graph, labels, goal_label, pose_source="pnp")
     vio_events = replay_full_pipeline(vrs_path, index, graph, labels, goal_label, pose_source="recorded_vio")
 
@@ -412,11 +319,6 @@ def compare_recordings(vrs_paths, index_path="maps/reloc_index.pkl"):
 
 
 def plot_localization(graph, results, path=None, goal_label=None, save_path=None):
-    """
-    Visualizes: all graph waypoints (gray background), the planned A* path
-    (blue dashed line), and the actual localized trajectory from
-    replay_localization_only results (green = localized, gaps = lost frames).
-    """
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(10, 8))

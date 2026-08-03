@@ -1,68 +1,239 @@
+import time
+
 import aria.sdk_gen2 as sdk_gen2
-from aria.sdk_gen2 import (
-    DeviceClient, DeviceTarget, HttpStreamingConfig, StreamingInterface,
-    StreamDataInterface, AriaGen2HttpServer, HttpServerConfig
-)
-import aria.oss_data_converter as data_converter
+import aria.stream_receiver as receiver
 
-DEVICE_IP = "192.168.225.7"  # not used for USB, but DeviceTarget can stay empty for auto-detect over USB
+from projectaria_tools.core.sensor_data import FrontendOutput
 
-# --- 1. Connect ---
-client = DeviceClient()
-device = client.connect(DeviceTarget())  # USB auto-detect
 
-# --- 2. Set up data converter (calibration set once we receive it) ---
-converter = data_converter.OssDataConverter(enable_image_decoding=False)
-calibration_ready = False
+# ============================================================
+# GLOBALS
+# ============================================================
 
-def on_calib(device_calibration):
-    global calibration_ready
-    converter.set_calibration(device_calibration.get_json())  # method name may vary — check calib object's serialization method
-    calibration_ready = True
-    print("Calibration received, VIO decoding enabled")
+vio_count = 0
+start_time = time.time()
 
-def on_vio(frontend_output):
-    if not calibration_ready:
-        return
-    pose = frontend_output.transform_odometry_bodyimu
-    t = pose.translation()
-    r = pose.rotation().log()
-    print(f"VIO pose  t={t}  r={r}")
 
-def on_vio_high_freq(vio_poses):
-    if not calibration_ready:
-        return
-    for p in vio_poses:
-        t = p.transform_odometry_device.translation()
-        print(f"HF VIO  t={t}")
+# ============================================================
+# VIO CALLBACK
+# ============================================================
 
-# --- 3. Register callbacks ---
-stream_interface = StreamDataInterface(enable_image_decoding=False, enable_raw_stream=False)
-stream_interface.register_device_calib_callback(on_calib)
-stream_interface.register_vio_callback(on_vio)
-stream_interface.register_vio_high_frequency_callback(on_vio_high_freq)  # optional, drop if not needed
+def vio_callback(vio_data: FrontendOutput):
+    global vio_count
 
-# Optional: bump queue size if you see drops
-stream_interface.set_vio_queue_size(30)
+    vio_count += 1
 
-# --- 4. Configure streaming over USB ---
-config = HttpStreamingConfig()
-config.profile_name = "profile_name_with_vio"  # replace after checking device.device_profiles()
-config.streaming_interface = StreamingInterface.USB_NCM  # use USB_RNDIS on Windows
-device.set_streaming_config(config)
+    timestamp_ns = vio_data.capture_timestamp_ns
 
-# --- 5. Start HTTP server to receive the stream, then start streaming ---
-server_config = HttpServerConfig()
-server_config.address = "0.0.0.0"
-server_config.port = 8080
-server = AriaGen2HttpServer(server_config, stream_interface)
+    T_odom_bodyimu = vio_data.transform_odometry_bodyimu
 
-device.install_streaming_certs()
-device.start_streaming()
+    rotation = T_odom_bodyimu.rotation().log()
+    translation = T_odom_bodyimu.translation()
+
+    elapsed = time.time() - start_time
+
+    print(
+        f"[VIO #{vio_count:05d}] "
+        f"t={elapsed:6.2f}s | "
+        f"timestamp={timestamp_ns} | "
+        f"position={translation} | "
+        f"rotation={rotation}"
+    )
+
+
+# ============================================================
+# CONNECT
+# ============================================================
+
+print("Connecting to Aria Gen2...")
+
+device_client = sdk_gen2.DeviceClient()
+
+client_config = sdk_gen2.DeviceClientConfig()
+device_client.set_client_config(client_config)
+
+device = device_client.connect()
+
+print("Connected.")
+
+
+# ============================================================
+# STREAM CONFIG
+# ============================================================
+
+streaming_config = sdk_gen2.HttpStreamingConfig()
+
+# Official MP streaming profile:
+# includes VIO / eye gaze / hand tracking
+streaming_config.profile_name = "mp_streaming_demo"
+
+# IMPORTANT:
+# Do NOT manually set USB_NCM for this test.
+# Let the SDK use its default USB streaming configuration.
+
+device.set_streaming_config(streaming_config)
+
+print("Profile configured: mp_streaming_demo")
+
+
+# ============================================================
+# START DEVICE STREAMING FIRST
+# ============================================================
+
+stream_started = False
+stream_receiver = None
 
 try:
-    server.join()
+
+    print("Starting streaming on glasses...")
+
+    device.start_streaming()
+
+    stream_started = True
+
+    print("Device streaming started.")
+
+
+    # ========================================================
+    # NOW CREATE RECEIVER
+    # ========================================================
+
+    print("Creating StreamReceiver...")
+
+    server_config = sdk_gen2.HttpServerConfig()
+
+    server_config.address = "0.0.0.0"
+    server_config.port = 6768
+
+    # Use default constructor just like official example
+    stream_receiver = receiver.StreamReceiver()
+
+    stream_receiver.set_server_config(server_config)
+
+
+    # ========================================================
+    # REGISTER VIO
+    # ========================================================
+
+    stream_receiver.register_vio_callback(vio_callback)
+
+    print("VIO callback registered.")
+
+
+    # ========================================================
+    # START SERVER
+    # ========================================================
+
+    print("Starting receiver server on port 6768...")
+
+    stream_receiver.start_server()
+
+    print("Receiver started.")
+
+
+    # ========================================================
+    # TEST
+    # ========================================================
+
+    print()
+    print("=" * 70)
+    print("LIVE GEN2 VIO TEST")
+    print("=" * 70)
+    print()
+    print("Waiting for VIO...")
+    print("Press Ctrl+C to stop.")
+    print()
+    print("=" * 70)
+
+
+    last_count = 0
+
+    while True:
+
+        time.sleep(2)
+
+        current = vio_count
+        received = current - last_count
+
+        print(
+            f"[STATUS] "
+            f"VIO total={current} | "
+            f"last 2 sec={received}"
+        )
+
+        last_count = current
+
+
 except KeyboardInterrupt:
-    device.stop_streaming()
-    server.stop()
-    client.disconnect(device)
+
+    print("\nStopping...")
+
+
+except Exception as e:
+
+    print(
+        f"\nERROR: {type(e).__name__}: {e}"
+    )
+
+
+finally:
+
+    print("\nCleaning up...")
+
+
+    # --------------------------------------------------------
+    # STOP RECEIVER
+    # --------------------------------------------------------
+
+    if stream_receiver is not None:
+
+        try:
+
+            stream_receiver.stop_server()
+
+            print("Receiver stopped.")
+
+        except Exception as e:
+
+            print(
+                f"Receiver shutdown error: {e}"
+            )
+
+
+    # --------------------------------------------------------
+    # STOP DEVICE STREAM
+    # --------------------------------------------------------
+
+    if stream_started:
+
+        try:
+
+            device.stop_streaming()
+
+            print("Device streaming stopped.")
+
+        except Exception as e:
+
+            print(
+                f"Device stop error: {e}"
+            )
+
+
+    # --------------------------------------------------------
+    # DISCONNECT
+    # --------------------------------------------------------
+
+    try:
+
+        device_client.disconnect(device)
+
+        print("Device disconnected.")
+
+    except Exception as e:
+
+        print(
+            f"Disconnect error: {e}"
+        )
+
+
+    print("Done.")

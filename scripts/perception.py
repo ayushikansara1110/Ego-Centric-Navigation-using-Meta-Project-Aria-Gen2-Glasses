@@ -1,17 +1,3 @@
-"""
-perception.py
-Real-time. Runs YOLO on the live RGB frame, splits the frame down the middle,
-and reports:
-  - doors visible, and which side (left/right) they're on
-  - people visible, how close they are, and whether they're a collision risk
-
-Requires: ultralytics (pip install ultralytics --break-system-packages)
-A door class isn't in stock COCO weights — either fine-tune a small YOLO
-model on a few hundred labelled corridor-door images, or swap in any door
-detector you already have. Person detection works out of the box with
-stock yolov8n.pt.
-"""
-
 from dataclasses import dataclass
 from ultralytics import YOLO
 

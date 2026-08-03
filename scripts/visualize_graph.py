@@ -1,13 +1,4 @@
 """
-visualize_graph.py
-==================
-Visualization utility for the Aria indoor navigation pipeline.
-
-Renders the occupancy grid with the waypoint graph and (optionally) a
-navigation path overlaid. Saves a PNG and optionally displays interactively.
-
-Usage
------
 # just map + graph
 python visualize_graph.py \
     --map    "/home/ayushi/aria_gen2/maps/csb_corridor_map.npz" \
@@ -21,7 +12,7 @@ python visualize_graph.py \
     --nav    "/home/ayushi/aria_gen2/maps/navigation_result.json" \
     --out    "./maps/nav_view.png"
 
-# show interactively (requires display)
+# show interactively 
 python visualize_graph.py --map "/home/ayushi/aria_gen2/maps/merged_map.npz" --graph "/home/ayushi/aria_gen2/graphs/graph.npz" --show
 """
 

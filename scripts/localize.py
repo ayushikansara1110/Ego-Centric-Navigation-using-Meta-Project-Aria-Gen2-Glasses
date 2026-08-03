@@ -20,14 +20,7 @@ def load_index(path="/home/ayushi/aria_gen2/scripts/reloc_index.pkl"):
 
 
 def build_camera_matrix(cam_calib):
-    """
-    Builds a synthetic PINHOLE camera_matrix (fx, fy, cx, cy, no distortion)
-    from a projectaria_tools FISHEYE624 CameraCalibration object. This is
-    NOT the camera's real intrinsics for direct use with raw pixel points --
-    it's the target model that undistort_points_fisheye624() maps INTO.
-    Pass this (with dist_coeffs=None) to cv2.solvePnPRansac after undistorting
-    points, not the other way around.
-    """
+   
     fx, fy = cam_calib.get_focal_lengths()
     cx, cy = cam_calib.get_principal_point()
     return np.array([
@@ -38,23 +31,6 @@ def build_camera_matrix(cam_calib):
 
 
 def undistort_points_fisheye624(image_points, cam_calib, camera_matrix):
-    """
-    Converts real FISHEYE624 pixel coordinates into ideal pinhole pixel
-    coordinates using the camera's own unproject() (real fisheye model) ->
-    reproject through the synthetic pinhole camera_matrix. This lets
-    cv2.solvePnPRansac be used correctly with dist_coeffs=None, instead of
-    (wrongly) treating FISHEYE624 params as OpenCV radial-tangential
-    distortion coefficients.
-
-    Points outside the camera's valid FOV (unproject returns None) are
-    dropped -- caller must drop the corresponding object_points at the same
-    indices, which try_pnp() below does.
-
-    VERIFY: unproject()'s exact input convention (pixel (u,v) vs (x,y), 0 vs
-    0.5 pixel-center offset) hasn't been independently confirmed -- if
-    solved poses come out systematically offset/rotated once tested against
-    known ground truth, this is the first place to check.
-    """
     fx = camera_matrix[0, 0]
     fy = camera_matrix[1, 1]
     cx = camera_matrix[0, 2]
@@ -109,19 +85,7 @@ def _chunked_knn_match(bf, query_descs, train_descs, k=2, chunk_size=200000):
 
 
 def try_pnp(frame, index, camera_matrix, dist_coeffs, cam_calib=None):
-    """
-    Single-frame relocalization attempt. Returns (rvec, tvec) or None.
 
-    If cam_calib is provided (a projectaria_tools FISHEYE624 CameraCalibration
-    object), detected keypoints are undistorted through the real fisheye
-    model before PnP, and camera_matrix/dist_coeffs should be the SYNTHETIC
-    pinhole matrix from build_camera_matrix() + dist_coeffs=None -- NOT the
-    raw FISHEYE624 parameters.
-
-    If cam_calib is None (backward-compatible path), camera_matrix/dist_coeffs
-    are used as-is with cv2's own distortion model -- only correct for
-    genuinely pinhole/radial-tangential cameras, not Aria SLAM cameras.
-    """
     kps, descs = ORB.detectAndCompute(frame, None)
     if descs is None or len(descs) < MIN_INLIERS:
         return None
@@ -161,24 +125,7 @@ def pose_to_matrix(rvec, tvec):
 
 
 class Tracker:
-    """
-    Two usage modes are supported:
-
-    1. Session-relative mode (bootstrap / live_map_pose / start_background_refresh):
-       requires an external session pose (e.g. VIO) and composes it with a
-       cached map<-session transform. Kept for reference / future use.
-
-    2. Direct PnP mode (localize / localize_or_last_known): re-runs PnP every
-       call, no session pose needed at all. Simpler, no VIO dependency,
-       coarser update rate. This is what the current script uses.
-
-    cam_calib: optional projectaria_tools FISHEYE624 CameraCalibration
-    object. If provided, camera_matrix MUST be the synthetic pinhole matrix
-    from build_camera_matrix(cam_calib) and dist_coeffs is ignored (fisheye
-    undistortion is used instead). If None, camera_matrix/dist_coeffs are
-    used as-is with OpenCV's own distortion model.
-    """
-
+   
     def __init__(self, index, camera_matrix, dist_coeffs, cam_calib=None):
         self.index = index
         self.camera_matrix = camera_matrix
@@ -251,14 +198,6 @@ class Tracker:
         return T_map_from_cam
 
     def localize_or_last_known(self, frame, max_staleness_s=5.0):
-        """
-        Try a fresh localize(); if it fails, fall back to the last successful
-        pose IF it's not too stale. Returns (T_or_None, was_fresh).
-        (pose, False) = using a slightly old fix.
-        (None, False) = no usable pose at all -- don't trust position, and
-        the caller should treat this as "lost" rather than silently
-        navigating on stale/garbage position.
-        """
         T = self.localize(frame)
         if T is not None:
             return T, True

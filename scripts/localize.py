@@ -115,23 +115,23 @@ def try_pnp(frame, index, camera_matrix, dist_coeffs, cam_calib=None):
         return None
     return rvec, tvec
 
-
 def pose_to_matrix(rvec, tvec):
     R, _ = cv2.Rodrigues(rvec)
-    T = np.eye(4)
-    T[:3, :3] = R
-    T[:3, 3] = tvec.flatten()
-    return T
+    T_cam_from_map = np.eye(4)
+    T_cam_from_map[:3, :3] = R
+    T_cam_from_map[:3, 3] = tvec.flatten()
+    return np.linalg.inv(T_cam_from_map)  
 
 
 class Tracker:
    
-    def __init__(self, index, camera_matrix, dist_coeffs, cam_calib=None):
+    def __init__(self, index, camera_matrix, dist_coeffs, cam_calib=None, T_device_from_cam=None):
         self.index = index
         self.camera_matrix = camera_matrix
         self.dist_coeffs = dist_coeffs
         self.cam_calib = cam_calib
         self.T_map_from_session = None
+        self.T_device_from_cam = T_device_from_cam
         self._last_good_pose = None
         self._last_good_ts = 0.0
         self._lock = threading.Lock()
@@ -150,9 +150,10 @@ class Tracker:
             if result is not None:
                 rvec, tvec = result
                 T_map_from_cam = pose_to_matrix(rvec, tvec)
-                T_session_from_cam = get_session_pose_fn()
+                T_map_from_device = T_map_from_cam @ np.linalg.inv(self.T_device_from_cam)
+                T_session_from_device = get_session_pose_fn()
                 with self._lock:
-                    self.T_map_from_session = T_map_from_cam @ np.linalg.inv(T_session_from_cam)
+                    self.T_map_from_session = T_map_from_device @ np.linalg.inv(T_session_from_device)
                 return True
             time.sleep(retry_interval_s)
         return False
@@ -172,9 +173,10 @@ class Tracker:
                 if result is not None:
                     rvec, tvec = result
                     T_map_from_cam = pose_to_matrix(rvec, tvec)
-                    T_session_from_cam = get_session_pose_fn()
+                    T_map_from_device = T_map_from_cam @ np.linalg.inv(self.T_device_from_cam)
+                    T_session_from_device = get_session_pose_fn()
                     with self._lock:
-                        self.T_map_from_session = T_map_from_cam @ np.linalg.inv(T_session_from_cam)
+                        self.T_map_from_session = T_map_from_device @ np.linalg.inv(T_session_from_device)
         threading.Thread(target=loop, daemon=True).start()
 
     def stop(self):

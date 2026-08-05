@@ -1,3 +1,5 @@
+from operator import index
+
 import numpy as np
 from projectaria_tools.core import data_provider
 
@@ -72,17 +74,14 @@ def list_streams(vrs_path):
 
 
 def get_camera_calibration(provider, camera_label="slam-front-left"):
-    
     device_calib = provider.get_device_calibration()
     cam_calib = device_calib.get_camera_calib(camera_label)
     if cam_calib is None:
         available = [c for c in device_calib.get_all_labels() if "slam" in c.lower()]
-        raise ValueError(
-            f"'{camera_label}' not found in calibration -- "
-            f"SLAM-related labels available: {available}"
-        )
+        raise ValueError(f"'{camera_label}' not found -- available: {available}")
     camera_matrix = localize.build_camera_matrix(cam_calib)
-    return camera_matrix, None, cam_calib
+    T_device_from_cam = np.array(device_calib.get_transform_device_sensor(camera_label).to_matrix())  # CONFIRM METHOD NAME
+    return camera_matrix, None, cam_calib, T_device_from_cam
 
 
 def _stream_frames_by_timestamp(provider, stream_id):
@@ -96,8 +95,8 @@ def replay_localization_only(vrs_path, index, camera_label="slam-front-left",
                               slam_stream_label="slam-front-left", stride=1):
 
     provider = data_provider.create_vrs_data_provider(vrs_path)
-    camera_matrix, dist_coeffs, cam_calib = get_camera_calibration(provider, camera_label)
-    tracker = localize.Tracker(index, camera_matrix, dist_coeffs, cam_calib=cam_calib)
+    camera_matrix, dist_coeffs, cam_calib, T_device_from_cam = get_camera_calibration(provider, camera_label)
+    tracker = localize.Tracker(index, camera_matrix, dist_coeffs, cam_calib=cam_calib, T_device_from_cam=T_device_from_cam)
 
     stream_id = provider.get_stream_id_from_label(slam_stream_label)
     if stream_id is None:
@@ -130,8 +129,8 @@ def replay_full_pipeline(vrs_path, index, graph, labels, goal_label,
         raise ValueError(f"pose_source must be 'pnp' or 'recorded_vio', got {pose_source!r}")
 
     provider = data_provider.create_vrs_data_provider(vrs_path)
-    camera_matrix, dist_coeffs, cam_calib = get_camera_calibration(provider, camera_label)
-    tracker = localize.Tracker(index, camera_matrix, dist_coeffs, cam_calib=cam_calib)
+    camera_matrix, dist_coeffs, cam_calib, T_device_from_cam = get_camera_calibration(provider, camera_label)
+    tracker = localize.Tracker(index, camera_matrix, dist_coeffs, cam_calib=cam_calib, T_device_from_cam=T_device_from_cam)
     perceiver = perception.Perception(focal_length_px=camera_matrix[0, 0])
 
     # T_map_from_session: cached transform from VIO's odometry frame into the

@@ -46,8 +46,8 @@ graph = navigate_videp.load_graph("/home/ayushi/aria_gen2/graphs/graph.npz")
 print("\n=== Localizing... ===")
 t0 = time.time()
 provider = data_provider.create_vrs_data_provider(VRS_PATH)
-camera_matrix, dist_coeffs, cam_calib = get_camera_calibration(provider, SLAM_LABEL)
-tracker = localize.Tracker(index, camera_matrix, dist_coeffs, cam_calib=cam_calib)
+camera_matrix, dist_coeffs, cam_calib, T_device_from_cam = get_camera_calibration(provider, SLAM_LABEL)
+tracker = localize.Tracker(index, camera_matrix, dist_coeffs, cam_calib=cam_calib, T_device_from_cam=T_device_from_cam)
 stream_id = provider.get_stream_id_from_label(SLAM_LABEL)
 
 start_pos = None

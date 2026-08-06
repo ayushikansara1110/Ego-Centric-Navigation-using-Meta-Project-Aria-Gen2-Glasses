@@ -14,7 +14,7 @@ HEADING_DELTA_THRESHOLD_DEG = 25
 DRIFT_REFRESH_INTERVAL_S = 20   # re-run PnP in the background this often (bootstrap/refresh path)
 
 
-def load_index(path="/home/ayushi/aria_gen2/scripts/reloc_index.pkl"):
+def load_index(path="/home/ayushi/aria_gen2/scripts/reloc_index2.pkl"):
     with open(path, "rb") as f:
         return pickle.load(f)
 
@@ -83,37 +83,115 @@ def _chunked_knn_match(bf, query_descs, train_descs, k=2, chunk_size=200000):
         merged.append(candidates[:k])
     return merged
 
-
 def try_pnp(frame, index, camera_matrix, dist_coeffs, cam_calib=None):
 
+    if frame is None:
+        print("[PnP] frame is None")
+        return None
+
+    print(
+        f"[PnP] frame shape={frame.shape} "
+        f"dtype={frame.dtype} "
+        f"min={frame.min()} max={frame.max()}"
+    )
+
     kps, descs = ORB.detectAndCompute(frame, None)
+
+    print(
+        f"[PnP] ORB keypoints={len(kps) if kps is not None else 0}, "
+        f"descriptors={None if descs is None else descs.shape}"
+    )
+
     if descs is None or len(descs) < MIN_INLIERS:
+        print("[PnP FAIL] Not enough ORB descriptors")
         return None
 
-    matches = _chunked_knn_match(BF, descs, index["descriptors"], k=2)
-    good = [m for m, n in matches if n is not None and m.distance < LOWE_RATIO * n.distance]
+    matches = _chunked_knn_match(
+        BF,
+        descs,
+        index["descriptors"],
+        k=2
+    )
+
+    good = [
+        m for pair in matches
+        if len(pair) >= 2
+        for m, n in [pair]
+        if m.distance < LOWE_RATIO * n.distance
+    ]
+
+    print(
+        f"[PnP] raw queries={len(matches)}, "
+        f"good Lowe matches={len(good)}"
+    )
+
     if len(good) < MIN_INLIERS:
+        print(
+            f"[PnP FAIL] Only {len(good)} good matches; "
+            f"need {MIN_INLIERS}"
+        )
         return None
 
-    image_points = np.array([kps[m.queryIdx].pt for m in good], dtype=np.float64)
-    object_points = np.array([index["xyz_map_frame"][m.trainIdx] for m in good], dtype=np.float64)
+    image_points = np.array(
+        [kps[m.queryIdx].pt for m in good],
+        dtype=np.float64
+    )
+
+    object_points = np.array(
+        [index["xyz_map_frame"][m.trainIdx] for m in good],
+        dtype=np.float64
+    )
 
     if cam_calib is not None:
-        image_points, valid_mask = undistort_points_fisheye624(image_points, cam_calib, camera_matrix)
+        image_points, valid_mask = undistort_points_fisheye624(
+            image_points,
+            cam_calib,
+            camera_matrix
+        )
+
         object_points = object_points[valid_mask]
+
+        print(
+            f"[PnP] valid after unprojection="
+            f"{len(image_points)}/{len(good)}"
+        )
+
         if len(image_points) < MIN_INLIERS:
+            print("[PnP FAIL] Too few points after unprojection")
             return None
+
         pnp_dist_coeffs = None
+
     else:
         pnp_dist_coeffs = dist_coeffs
 
     ok, rvec, tvec, inliers = cv2.solvePnPRansac(
-        object_points, image_points, camera_matrix, pnp_dist_coeffs,
-        reprojectionError=4.0, confidence=0.99
+        object_points,
+        image_points,
+        camera_matrix,
+        pnp_dist_coeffs,
+        reprojectionError=4.0,
+        confidence=0.99
     )
-    if not ok or inliers is None or len(inliers) < MIN_INLIERS:
+
+    ninliers = 0 if inliers is None else len(inliers)
+
+    print(
+        f"[PnP] solvePnPRansac ok={ok}, "
+        f"inliers={ninliers}"
+    )
+
+    if not ok or inliers is None or ninliers < MIN_INLIERS:
+        print(
+            f"[PnP FAIL] RANSAC failed / insufficient inliers "
+            f"({ninliers}/{MIN_INLIERS})"
+        )
         return None
+
+    print(f"\n🔥 [PnP SUCCESS] {ninliers} inliers 🔥\n")
+
     return rvec, tvec
+
 
 def pose_to_matrix(rvec, tvec):
     R, _ = cv2.Rodrigues(rvec)

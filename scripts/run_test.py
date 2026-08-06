@@ -32,15 +32,15 @@ def node_for_label(label, labels, threshold=60):
         return labels[match]
     raise KeyError(f"'{label}' not found (closest: '{match}', score {score:.0f})")
 
-VRS_PATH = "/home/ayushi/aria_gen2/vrs_files/test7.vrs"
+VRS_PATH = "/home/ayushi/aria_gen2/vrs_files/test6.vrs"
 SLAM_LABEL = "slam-front-left"
 
-labels = navigate_videp.load_labels("/home/ayushi/aria_gen2/scripts/labels.json")
+labels = navigate_videp.load_labels("/home/ayushi/aria_gen2/scripts/labels2.json")
 id_to_label = {v: k for k, v in labels.items()}
 
 print("=== Loading map data ===")
-index = localize.load_index("/home/ayushi/aria_gen2/scripts/reloc_index.pkl")
-graph = navigate_videp.load_graph("/home/ayushi/aria_gen2/graphs/graph.npz")
+index = localize.load_index("/home/ayushi/aria_gen2/scripts/reloc_index2.pkl")
+graph = navigate_videp.load_graph("/home/ayushi/aria_gen2/graph2/new/graph.npz")
 
 # --- FAST first fix: only scan frames until PnP succeeds once, not the whole file ---
 print("\n=== Localizing... ===")

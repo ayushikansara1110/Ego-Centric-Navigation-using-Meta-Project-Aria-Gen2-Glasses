@@ -354,7 +354,7 @@ if __name__ == "__main__":
         "/home/ayushi/aria_gen2/vrs_files/test1.vrs",
         "/home/ayushi/aria_gen2/vrs_files/test2.vrs",
         "/home/ayushi/aria_gen2/vrs_files/test3.vrs",
-    ], index_path="/home/ayushi/aria_gen2/scripts/reloc_index.pkl")
+    ], index_path="/home/ayushi/aria_gen2/scripts/reloc_index2.pkl")
 
     # Step 3 -- full pipeline replay (once localization numbers look solid):
     # index = localize.load_index("/home/ayushi/aria_gen2/scripts/reloc_index.pkl")

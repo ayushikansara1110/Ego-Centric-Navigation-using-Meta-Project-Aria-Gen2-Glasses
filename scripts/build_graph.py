@@ -1,7 +1,7 @@
 """
 python build_graph.py \
-    --map    "/home/ayushi/aria_gen2/maps/csb_corridor_map.npz" \
-    --outdir "/home/ayushi/aria_gen2/graphs" \
+    --map    "/home/ayushi/aria_gen2/maps2/csb_corridor2_map.npz" \
+    --outdir "/home/ayushi/aria_gen2/graphs2" \
     --spacing 1       # min distance between waypoints in metres
     --labels labels.json  (optional)
 """

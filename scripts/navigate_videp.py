@@ -1,24 +1,3 @@
-"""
-navigate.py
-Path planning + turn-by-turn logic module, matching the interface expected by
-aria_navigate.py (live nav loop) and replay_vrs.py (offline replay harness):
-
-  load_graph(path)                 -> graph object with .waypoints/.labels/.adj
-  load_labels(path)                -> dict {label_name: node_id}
-  nearest_node(pos_xy, graph)      -> nearest node id to a world (x,y)
-  node_for_label(label, labels)    -> node id for a destination label
-  plan_path(graph, start, goal)    -> list of Node objects (each has .xy, .id)
-  heading_from_matrix(T)           -> heading in degrees from a 4x4 pose matrix
-  reached_waypoint(pos_xy, wp_xy)  -> bool, close enough to advance
-  instruction_for_edge(path, idx)  -> spoken instruction for the upcoming edge
-  label_near_node(node, labels)    -> label string near a node, or None
-
-A* itself is the same algorithm as the standalone navigate.py CLI tool
-(adjacency list + heapq, straight-line heuristic) -- just adapted to work
-on Node objects instead of raw indices, and wrapped in the load/plan/query
-functions this module's callers expect.
-"""
-
 import heapq
 import json
 import math

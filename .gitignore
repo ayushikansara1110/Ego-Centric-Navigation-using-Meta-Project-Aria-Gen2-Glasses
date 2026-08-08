@@ -14,4 +14,11 @@ __pycache__/
 
 z/
 *.xyz
-nav_out/
+
+live_gui.py
+
+*.pkl
+
+maps/
+
+graphs/

@@ -56,12 +56,6 @@ def undistort_points_fisheye624(image_points, cam_calib, camera_matrix):
 IMGIDX_LIMIT = 262144  # OpenCV BFMatcher's hard per-train-set row cap (1 << 18)
 
 def _chunked_knn_match(bf, query_descs, train_descs, k=2, chunk_size=200000):
-    """
-    BFMatcher.knnMatch() hard-caps train descriptors at IMGIDX_LIMIT rows.
-    Splits train_descs into chunks under that limit, matches against each,
-    then merges to keep the true best-k matches per query descriptor across
-    chunks (remapping trainIdx back to the original, unchunked index).
-    """
     if len(train_descs) <= chunk_size:
         return bf.knnMatch(query_descs, train_descs, k=k)
 
@@ -188,7 +182,7 @@ def try_pnp(frame, index, camera_matrix, dist_coeffs, cam_calib=None):
         )
         return None
 
-    print(f"\n🔥 [PnP SUCCESS] {ninliers} inliers 🔥\n")
+    print(f"\n[🩷 PnP SUCCESS YIPPEE 🩷] {ninliers} inliers\n")
 
     return rvec, tvec
 

@@ -2,13 +2,15 @@ import time
 import localize
 import navigate_videp
 from rapidfuzz import fuzz, process
-from replay_test import (data_provider, get_camera_calibration, _stream_frames_by_timestamp,
-    replay_localization_only, plot_localization)
+from replay_test_new import (data_provider, get_camera_calibration, _stream_frames_by_timestamp,
+    replay_localization_only, plot_localization, replay_full_pipeline)
 import re
 import matplotlib
 matplotlib.use("TkAgg")  # avoids the Qt plugin conflict cv2 causes
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+os.environ["VRS_LOG_LEVEL"] = "ERROR"   # or "WARNING" / "OFF" depending on build
 
 
 def node_for_label(label, labels, threshold=60):
@@ -79,17 +81,43 @@ for name in labels:
     print(" -", name)
 goal_label = input("\nWhere do you want to go? ").strip()
 goal_node = node_for_label(goal_label, labels)
+goal_label = id_to_label[goal_node]
 
 # --- plan + instructions ---
 path = navigate_videp.plan_path(graph, start_node, goal_node)
+# print(f"\n=== Instructions to {goal_label} ===")
+# for i in range(len(path) - 1):
+#     print(navigate_videp.instruction_for_edge(path, i))
+# print(f"You've arrived at {goal_label}.")
 print(f"\n=== Instructions to {goal_label} ===")
-for i in range(len(path) - 1):
-    print(navigate_videp.instruction_for_edge(path, i))
+
+instructions = navigate_videp.build_route_instructions(path)
+
+for instr in instructions:
+    print(instr)
+
 print(f"You've arrived at {goal_label}.")
 
-# --- full pass for the plot only, strided for speed ---
-print("\n=== Building trajectory plot (strided for speed) ===")
-results, success_rate = replay_localization_only(VRS_PATH, index, camera_label=SLAM_LABEL,
-                                                    slam_stream_label=SLAM_LABEL, stride=5)
-plot_localization(graph, results, path=path, goal_label=goal_label,
+
+
+# --- full pass for the plot, driven by recorded VIO (PnP only for bootstrap
+#     + periodic drift correction inside replay_full_pipeline itself) ---
+print("\n=== Building trajectory plot (VIO-driven, PnP only for corrections) ===")
+events = replay_full_pipeline(
+    VRS_PATH, index, graph, labels, goal_label,
+    camera_label=SLAM_LABEL, slam_stream_label=SLAM_LABEL,
+    vio_stream_label="vio", pose_source="recorded_vio",
+    drift_refresh_interval_s=20,  # periodic PnP correction, not per-frame
+)
+
+positions = [
+    {"localized": True, "pos_xy": e["pos_xy"]}
+    for e in events if e["type"] == "pose"
+]
+
+plot_localization(graph, positions, path=path, goal_label=goal_label,
                    save_path="/home/ayushi/aria_gen2/scripts/localization_plot.png")
+
+for e in events:
+    if e["type"] in ("off_path", "instruction", "localization_lost", "collision", "drift_corrected"):
+        print(e)

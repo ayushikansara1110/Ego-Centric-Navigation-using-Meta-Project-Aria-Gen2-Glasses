@@ -1,0 +1,32 @@
+You are approaching: {'label': '', 'x': 25.047, 'y': -5.208, 'notes': ''}.
+Walk straight for 1.6 metres.
+Bear left.
+You are approaching: {'label': '', 'x': 24.547, 'y': -5.708, 'notes': ''}.
+You are approaching: {'label': '', 'x': 23.047, 'y': -6.708, 'notes': ''}.
+You are approaching: {'label': '', 'x': 22.047, 'y': -7.208, 'notes': ''}.
+You are approaching: {'label': '', 'x': 21.047, 'y': -7.708, 'notes': ''}.
+You are approaching: {'label': "CSB-3030: Doctor Jamal Nasir's Office", 'x': 20.047, 'y': -8.208, 'notes': ''}.
+You are approaching: {'label': '', 'x': 19.047, 'y': -8.708, 'notes': ''}.
+You are approaching: {'label': '', 'x': 17.547, 'y': -9.708, 'notes': ''}.
+Walk straight for 8.8 metres.
+Bear right.
+You are approaching: {'label': '', 'x': 16.047, 'y': -10.208, 'notes': ''}.
+You are approaching: {'label': '', 'x': 14.547, 'y': -10.708, 'notes': ''}.
+You are approaching: {'label': 'CSB-3020: Career Development Centre Office', 'x': 13.047, 'y': -11.208, 'notes': ''}.
+You are approaching: {'label': '', 'x': 12.047, 'y': -11.708, 'notes': ''}.
+You are approaching: {'label': '', 'x': 10.547, 'y': -12.208, 'notes': ''}.
+You are approaching: {'label': '', 'x': 9.547, 'y': -12.708, 'notes': ''}.
+You are approaching: {'label': '', 'x': 8.047, 'y': -13.208, 'notes': ''}.
+Walk straight for 10.1 metres.
+Bear right.
+You are approaching: {'label': '', 'x': 7.047, 'y': -13.208, 'notes': ''}.
+Walk straight for 1.0 metres.
+Bear right.
+You are approaching: {'label': '', 'x': 5.547, 'y': -12.208, 'notes': ''}.
+Walk straight for 1.8 metres.
+Bear right.
+You are approaching: {'label': '', 'x': 5.047, 'y': -11.208, 'notes': ''}.
+You are approaching: {'label': '', 'x': 4.547, 'y': -10.208, 'notes': ''}.
+You are approaching: {'label': "CSB-3040: Doctor Ihsaan Ullah's Office", 'x': 3.547, 'y': -8.708, 'notes': ''}.
+Walk straight for 4.0 metres.
+You have arrived at: {'label': "CSB-3040: Doctor Ihsaan Ullah's Office", 'x': 3.547, 'y': -8.708, 'notes': ''}.

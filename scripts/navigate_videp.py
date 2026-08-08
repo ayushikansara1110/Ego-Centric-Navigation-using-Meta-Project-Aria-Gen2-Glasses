@@ -5,7 +5,7 @@ import pickle
 
 import numpy as np
 
-REACHED_WAYPOINT_THRESHOLD_M = 0.75  # how close counts as "arrived" at a waypoint
+REACHED_WAYPOINT_THRESHOLD_M = 1  # how close counts as "arrived" at a waypoint
 NEARBY_LABEL_THRESHOLD_M = 3.0       # how close a node must be to a labeled point of interest
 
 
@@ -67,6 +67,28 @@ def nearest_node(pos_xy, graph):
     dists = np.linalg.norm(graph.waypoints - pos_xy, axis=1)
     return int(dists.argmin())
 
+def nearest_route_index(pos_xy, path, current_edge_idx=0, lookahead=2):
+    """
+    Find the route node nearest to the user's actual position.
+
+    Only searches forward from the current route position so localization
+    noise cannot easily send navigation backwards along the route.
+    """
+    if path is None or len(path) == 0:
+        return current_edge_idx
+
+    pos_xy = np.asarray(pos_xy, dtype=np.float64)
+
+    start = max(0, current_edge_idx)
+    end = min(len(path), current_edge_idx + lookahead + 1)
+
+    distances = [
+        float(np.linalg.norm(path[i].xy - pos_xy))
+        for i in range(start, end)
+    ]
+
+    nearest_offset = int(np.argmin(distances))
+    return start + nearest_offset
 
 def _astar(graph, start_id, goal_id):
     waypoints = graph.waypoints
@@ -129,6 +151,46 @@ def reached_waypoint(pos_xy, waypoint_xy):
     dist = float(np.linalg.norm(np.asarray(pos_xy) - np.asarray(waypoint_xy)))
     return dist <= REACHED_WAYPOINT_THRESHOLD_M
 
+def closest_route_edge(pos_xy, path, current_edge_idx=0, lookahead=6):
+    """
+    Find which upcoming route segment the user is actually closest to.
+
+    Only searches forward from the current edge so navigation progress
+    cannot jump backwards.
+    """
+    if path is None or len(path) < 2:
+        return current_edge_idx
+
+    pos = np.asarray(pos_xy, dtype=np.float64)
+
+    start = current_edge_idx
+    end = min(len(path) - 1, current_edge_idx + lookahead + 1)
+
+    best_edge = current_edge_idx
+    best_dist = float("inf")
+
+    for i in range(start, end):
+        a = np.asarray(path[i].xy, dtype=np.float64)
+        b = np.asarray(path[i + 1].xy, dtype=np.float64)
+
+        ab = b - a
+        denom = float(np.dot(ab, ab))
+
+        if denom < 1e-9:
+            continue
+
+        # Projection of user onto this route segment
+        t = float(np.dot(pos - a, ab) / denom)
+        t = max(0.0, min(1.0, t))
+
+        closest = a + t * ab
+        dist = float(np.linalg.norm(pos - closest))
+
+        if dist < best_dist:
+            best_dist = dist
+            best_edge = i
+
+    return best_edge
 
 def _bearing_deg(a_xy, b_xy):
     dx = b_xy[0] - a_xy[0]
@@ -159,27 +221,132 @@ def _turn_description(delta_deg):
 
 
 def instruction_for_edge(path, edge_idx):
+
+    if edge_idx == 0:
+        return "Continue straight."
+
+    prev_start = path[edge_idx - 1]
     seg_start = path[edge_idx]
     seg_end = path[edge_idx + 1]
-    dist = float(np.linalg.norm(seg_end.xy - seg_start.xy))
+
+    prev_bearing = _bearing_deg(prev_start.xy, seg_start.xy)
     curr_bearing = _bearing_deg(seg_start.xy, seg_end.xy)
 
-    parts = []
-    if edge_idx > 0:
-        prev_start = path[edge_idx - 1]
-        prev_bearing = _bearing_deg(prev_start.xy, seg_start.xy)
-        turn = _turn_description(curr_bearing - prev_bearing)
-        if turn:
-            parts.append(turn.capitalize())
+    delta = curr_bearing - prev_bearing
 
-    if dist > 0.1:
-        parts.append(f"Walk straight for {dist:.1f} metres")
+    # normalize to [-180, 180]
+    delta = (delta + 180) % 360 - 180
 
-    if not parts:
-        parts.append("Continue")
+    # Ignore small bends in the graph.
+    # They are not meaningful pedestrian turns.
+    if abs(delta) < 55:
+        return None
 
-    return ". ".join(parts) + "."
+    if delta >= 135 or delta <= -135:
+        return "Turn around."
 
+    if delta > 55:
+        return "Turn left."
+
+    if delta < -55:
+        return "Turn right."
+
+    return None
+
+def remaining_path_distance(pos_xy, path, edge_idx):
+    """
+    Approximate remaining walking distance from the user's current position
+    to the final destination along the planned route.
+    """
+    if path is None or edge_idx >= len(path) - 1:
+        return 0.0
+
+    pos_xy = np.asarray(pos_xy, dtype=np.float64)
+
+    # Current position -> end of current edge
+    total = float(np.linalg.norm(path[edge_idx + 1].xy - pos_xy))
+
+    # Remaining route edges
+    for i in range(edge_idx + 1, len(path) - 1):
+        total += float(np.linalg.norm(path[i + 1].xy - path[i].xy))
+
+    return total
+
+
+# def distance_to_next_turn(path, edge_idx, turn_threshold_deg=35.0):
+    """
+    Returns (distance_metres, turn_text) for the next meaningful turn.
+    Returns (None, None) if the remaining route is essentially straight.
+    """
+    if path is None or edge_idx >= len(path) - 2:
+        return None, None, None
+
+    distance = 0.0
+
+    for i in range(edge_idx, len(path) - 2):
+        a = path[i].xy
+        b = path[i + 1].xy
+        c = path[i + 2].xy
+
+        distance += float(np.linalg.norm(b - a))
+
+        bearing1 = _bearing_deg(a, b)
+        bearing2 = _bearing_deg(b, c)
+
+        delta = (bearing2 - bearing1 + 180) % 360 - 180
+
+        if abs(delta) >= turn_threshold_deg:
+            if delta > 0:
+                return distance, "left", i+1
+            else:
+                return distance, "right", i+1
+
+    return None, None, None
+
+def distance_to_next_turn(pos_xy, path, edge_idx, turn_threshold_deg=55.0):
+    """
+    Distance from the USER'S CURRENT POSITION to the next meaningful turn.
+
+    Returns:
+        (distance_m, direction, turn_node_index)
+
+    or:
+        (None, None, None)
+    """
+
+    if path is None or edge_idx >= len(path) - 2:
+        return None, None, None
+
+    pos_xy = np.asarray(pos_xy, dtype=np.float64)
+
+    # Distance from CURRENT USER POSITION to the end of current edge.
+    distance = float(
+        np.linalg.norm(path[edge_idx + 1].xy - pos_xy)
+    )
+
+    # Look ahead through subsequent route edges.
+    for i in range(edge_idx, len(path) - 2):
+
+        a = path[i].xy
+        b = path[i + 1].xy
+        c = path[i + 2].xy
+
+        bearing1 = _bearing_deg(a, b)
+        bearing2 = _bearing_deg(b, c)
+
+        delta = (bearing2 - bearing1 + 180) % 360 - 180
+
+        if abs(delta) >= turn_threshold_deg:
+
+            if delta > 0:
+                return distance, "left", i + 1
+            else:
+                return distance, "right", i + 1
+
+        # No turn at b, so add NEXT edge.
+        distance += float(np.linalg.norm(c - b))
+
+    return None, None, None
 
 def label_near_node(node, labels_by_name, graph=None, threshold_m=NEARBY_LABEL_THRESHOLD_M):
     
@@ -194,3 +361,44 @@ def label_near_node(node, labels_by_name, graph=None, threshold_m=NEARBY_LABEL_T
         if float(np.linalg.norm(other_xy - node.xy)) <= threshold_m:
             return name
     return None
+
+def build_route_instructions(path):
+    """
+    Compress graph edges into human-readable navigation instructions.
+    """
+
+    if len(path) < 2:
+        return []
+
+    instructions = []
+
+    distance_accum = 0.0
+
+    for i in range(len(path) - 1):
+
+        a = path[i].xy
+        b = path[i + 1].xy
+
+        distance_accum += float(np.linalg.norm(b - a))
+
+        turn = None
+
+        if i < len(path) - 2:
+            turn = instruction_for_edge(path, i + 1)
+
+        if turn is not None:
+
+            instructions.append(
+                f"Walk straight for {round(distance_accum)} metres."
+            )
+
+            instructions.append(turn)
+
+            distance_accum = 0.0
+
+    if distance_accum > 0:
+        instructions.append(
+            f"Walk straight for {round(distance_accum)} metres."
+        )
+
+    return instructions

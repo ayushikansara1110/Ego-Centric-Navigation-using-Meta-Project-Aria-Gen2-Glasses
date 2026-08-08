@@ -8,6 +8,9 @@ import os
 import numpy as np
 from rapidfuzz import fuzz, process
 import re
+import queue
+import wave
+from faster_whisper import WhisperModel
 
 import aria.sdk_gen2 as sdk_gen2
 import aria.stream_receiver as receiver
@@ -20,6 +23,12 @@ PRIO_COLLISION, PRIO_OFF_PATH, PRIO_NAV = 0, 1, 2
 COOLDOWN_S = {PRIO_COLLISION: 1.0, PRIO_OFF_PATH: 4.0, PRIO_NAV: 0.0}
 VOICE = "en-GB-SoniaNeural"
 FRONT_LEFT_CAMERA_ID = 1
+# ── Speech input ──────────────────────────────────────────────────────────────
+
+STT_MODEL_SIZE = "small.en"
+STT_SAMPLE_RATE = 48000
+
+_audio_queue = queue.Queue()
 
 
 # ── TTS ──────────────────────────────────────────────────────────────────────
@@ -118,6 +127,27 @@ class LiveCache:
         with self._lock:
             return self.device_calib
 
+    def on_audio(self, *args):
+        """
+        Temporary diagnostic callback.
+
+        First run: print the callback signature so we can see exactly what
+        Aria Gen 2's Python receiver gives us for audio.
+        """
+        if not hasattr(self, "_seen_audio_callback"):
+            self._seen_audio_callback = True
+
+            print("\n=== AUDIO CALLBACK ===")
+            print("number of args:", len(args))
+
+            for i, arg in enumerate(args):
+                print(
+                    f"arg[{i}] type={type(arg)} "
+                    f"attrs={[x for x in dir(arg) if not x.startswith('_')][:30]}"
+                )
+
+            print("======================\n")
+
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 
@@ -198,6 +228,7 @@ def run():
 
     stream_receiver.register_vio_callback(cache.on_vio)
     stream_receiver.register_slam_callback(cache.on_slam)
+    stream_receiver.register_audio_callback(cache.on_audio)
     #stream_receiver.register_rgb_callback(cache.on_rgb)
     stream_receiver.register_device_calib_callback(cache.on_device_calib)
     print("Starting device streaming...")
@@ -281,48 +312,199 @@ def run():
             print(f"Already at {goal_label}.")
             return
 
+        # edge_idx = 0
+        # first_instruction = navigate_videp.instruction_for_edge(path, 0)
+        # if first_instruction:
+        #     print(first_instruction)
+        #     speak(first_instruction, PRIO_NAV)
+
         edge_idx = 0
-        first_instruction = navigate_videp.instruction_for_edge(path, 0)
+
+        # Total planned walking distance
+        initial_distance = sum(
+            float(np.linalg.norm(path[i + 1].xy - path[i].xy))
+            for i in range(len(path) - 1)
+        )
+
+        first_instruction = (
+            f"Navigation started. Continue straight. "
+            f"Your destination is approximately "
+            f"{initial_distance:.0f} metres away."
+        )
+
         print(first_instruction)
         speak(first_instruction, PRIO_NAV)
+
+        # ── Speech/navigation state ────────────────────────────────────────
+        last_progress_announcement = time.time()
+
+        PROGRESS_INTERVAL_S = 12.0
+
+        # Turn guidance
+        TURN_WARNING_DISTANCE_M = 6.0
+        TURN_REANNOUNCE_STEP_M = 2.0
+
+        # Destination guidance
+        DESTINATION_NEAR_M = 5.0
+        ARRIVAL_DISTANCE_M = 1.5
+
+        said_destination_near = False
+        announced_turn = None
+        last_announced_turn_dist = None
 
         # background refresh disabled for test #1
         # tracker.start_background_refresh(cache.get_slam, lambda: _vio_pose_to_T_device_from_odometry(cache.get_vio()))
 
         while edge_idx < len(path) - 1:
             vio_data = cache.get_vio()
+
             if vio_data is None or not _vio_status_is_valid(vio_data):
                 time.sleep(0.05)
                 continue
 
-            T_map = tracker.live_map_pose(_vio_pose_to_T_device_from_odometry(vio_data))
+            T_map = tracker.live_map_pose(
+                _vio_pose_to_T_device_from_odometry(vio_data)
+            )
+
             if T_map is None:
                 time.sleep(0.05)
                 continue
 
             pos_xy = T_map[:2, 3]
+
+            goal_xy = graph.waypoints[goal_node]
+            goal_dist = float(np.linalg.norm(pos_xy - goal_xy))
+
+            # ── ARRIVAL ────────────────────────────────────────────────────
+            # User does NOT need to stand exactly on the graph node.
+            if goal_dist <= ARRIVAL_DISTANCE_M:
+                instr = f"You have arrived at {goal_label}"
+                print(f"\n📍 {instr}")
+                speak(instr, PRIO_NAV)
+                break
+
             heading_deg = navigate_videp.heading_from_matrix(T_map)
+            # ── Automatically synchronize route progress ─────────────────────────
+            new_edge_idx = navigate_videp.closest_route_edge(
+                pos_xy,
+                path,
+                current_edge_idx=edge_idx,
+                lookahead=6,
+            )
+
+            if new_edge_idx > edge_idx:
+                print(
+                    f"\n[ROUTE SYNC] edge {edge_idx} -> {new_edge_idx}"
+                )
+                edge_idx = new_edge_idx
             seg_start, seg_end = path[edge_idx], path[edge_idx + 1]
+
+            # How much route remains?
+            remaining = navigate_videp.remaining_path_distance(
+                pos_xy, path, edge_idx
+            )
+
+            # Where is the next meaningful turn?
+            turn_dist, turn_direction, turn_idx = navigate_videp.distance_to_next_turn(pos_xy, path, edge_idx)
 
             print(f"\r[LIVE] x={pos_xy[0]:7.2f} y={pos_xy[1]:7.2f} "
                   f"heading={heading_deg:7.1f}° edge={edge_idx+1}/{len(path)-1}",
                   end="", flush=True)
 
-            correction = localize.check_path_adherence(pos_xy, heading_deg, seg_start.xy, seg_end.xy)
-            if correction:
-                speak(correction, PRIO_OFF_PATH)
+            # ── DESTINATION APPROACHING ────────────────────────────────────
+            if (
+                goal_dist <= DESTINATION_NEAR_M
+                and not said_destination_near
+            ):
+                instr = (
+                    f"Your destination is about "
+                    f"{max(1, round(goal_dist))} metres ahead."
+                )
+
+                print(f"\n===> {instr}")
+                speak(instr, PRIO_NAV)
+                said_destination_near = True
+
+
+            # ── ADVANCE TURN WARNING ───────────────────────────────────────
+            if (
+                turn_dist is not None
+                and turn_dist <= TURN_WARNING_DISTANCE_M
+            ):
+                turn_key = (turn_idx, turn_direction)
+
+                # New turn: reset the distance announcement history
+                if announced_turn != turn_key:
+                    last_announced_turn_dist = None
+
+                should_announce = (
+                    announced_turn != turn_key
+                    or last_announced_turn_dist is None
+                    or (last_announced_turn_dist - turn_dist) >= TURN_REANNOUNCE_STEP_M
+                )
+
+                if should_announce:
+                    instr = (
+                        f"In about {max(1, round(turn_dist))} metres, "
+                        f"turn {turn_direction}."
+                    )
+
+                    print(f"\n===> {instr}")
+                    speak(instr, PRIO_NAV)
+
+                    announced_turn = turn_key
+                    last_announced_turn_dist = turn_dist    
+
+            # ── OCCASIONAL PROGRESS UPDATE ─────────────────────────────────
+            now = time.time()
+
+            if (
+                now - last_progress_announcement >= PROGRESS_INTERVAL_S
+                and goal_dist > DESTINATION_NEAR_M
+            ):
+                if turn_dist is not None and turn_dist < 10.0:
+                    instr = (
+                        f"Continue straight. "
+                        f"Turn {turn_direction} in approximately "
+                        f"{max(1, round(turn_dist))} metres."
+                    )
+                else:
+                    instr = (
+                        f"Continue straight. "
+                        f"Approximately {max(1, round(remaining))} "
+                        f"metres remaining."
+                    )
+
+                print(f"\n===> {instr}")
+                speak(instr, PRIO_NAV)
+
+                last_progress_announcement = now
+            # correction = localize.check_path_adherence(pos_xy, heading_deg, seg_start.xy, seg_end.xy)
+            # if correction:
+            #     speak(correction, PRIO_OFF_PATH)
 
             if navigate_videp.reached_waypoint(pos_xy, seg_end.xy):
                 edge_idx += 1
+
                 if edge_idx < len(path) - 1:
-                    instr = navigate_videp.instruction_for_edge(path, edge_idx)
-                else:
-                    instr = f"You have arrived at {goal_label}"
-                print(f"\n{instr}")
-                speak(instr, PRIO_NAV)
+                    instr = navigate_videp.instruction_for_edge(
+                        path, edge_idx
+                    )
+
+                    # Only speak meaningful turns.
+                    # Do NOT announce every tiny graph segment.
+                    if instr and (
+                        "turn" in instr.lower()
+                        or "bear" in instr.lower()
+                    ):
+                        print(f"\n===> {instr}")
+                        speak(instr, PRIO_NAV)
+
+                # Do NOT announce arrival here.
+                # Arrival is handled using actual distance to the goal above.
 
             time.sleep(0.1)
-
+            
         tracker.stop()
 
     finally:
